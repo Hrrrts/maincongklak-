@@ -11,7 +11,7 @@ let isAnimating = false;
 let pregameCountdownInterval = null;
 window.gameStarted = false; 
 window.suitResultTimer = null;
-window.activeHole = null; // Menandai lubang yang sedang aktif
+window.activeHole = null; 
 window.confettiFired = false;
 
 let myClientId = sessionStorage.getItem('congklak_client_id') || (() => {
@@ -22,7 +22,6 @@ let myClientId = sessionStorage.getItem('congklak_client_id') || (() => {
 
 let gameState = { board: new Array(16).fill(0), current_player: 1, game_over: false, winner: null, p1_ready: false, p2_ready: false, p1_suit: null, p2_suit: null, suit_winner: null, p1_name: "", p2_name: "" };
 
-// --- SFX & VIBRATION ---
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 function playDropSound() {
     if(audioCtx.state === 'suspended') audioCtx.resume();
@@ -42,11 +41,20 @@ function triggerVibrate() {
     if (navigator.vibrate) navigator.vibrate(30);
 }
 
+// FITUR AUTO-JOIN & SAVE NAMA PADA SAAT REFRESH
 window.onload = () => {
     const urlParams = new URLSearchParams(window.location.search);
     const roomFromUrl = urlParams.get('room');
+    const savedName = localStorage.getItem('congklak_player_name') || "";
+
+    if (savedName) document.getElementById('name-input').value = savedName;
+
     if (roomFromUrl) {
         document.getElementById('room-input').value = roomFromUrl.toUpperCase();
+        if (savedName) {
+            document.querySelector("#lobby button").innerText = "Auto-Join...";
+            setTimeout(joinRoom, 800); // Otomatis masuk
+        }
     } else {
         document.getElementById('room-input').value = Math.random().toString(36).substring(2, 6).toUpperCase();
     }
@@ -64,6 +72,31 @@ function shareWhatsApp() {
     window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`, '_blank');
 }
 
+// SISTEM OTAK UTAMA (Mengecek fase permainan agar tidak nyangkut saat di-refresh)
+function checkGamePhase() {
+    if (isAnimating) return;
+
+    // Fase 1: Sedang Main
+    if (gameState.suit_winner && gameState.suit_winner !== 'SERI' && window.gameStarted) {
+        renderBoard();
+        return;
+    }
+
+    // Fase 2: Hitung Suit (Hanya P1 yang jadi wasit)
+    if (gameState.p1_suit && gameState.p2_suit && !gameState.suit_winner && myRole === 1) {
+        calculateSuitWinner();
+    }
+
+    // Fase 3: Mulai Countdown Suit (Jika Keduanya Ready)
+    if (gameState.p1_ready && gameState.p2_ready && !gameState.p1_suit && !gameState.p2_suit && !gameState.suit_winner) {
+        if (!pregameCountdownInterval && document.getElementById('pregame-suit-choices').classList.contains('hidden')) {
+            startPregameCountdown();
+        }
+    }
+
+    renderBoard();
+}
+
 async function joinRoom() {
     const roomInput = document.getElementById('room-input').value.trim().toUpperCase();
     const nameInput = document.getElementById('name-input').value.trim();
@@ -73,6 +106,8 @@ async function joinRoom() {
     document.querySelector("#lobby button").innerText = "Memuat...";
     myRoom = roomInput;
     myName = nameInput; 
+    
+    localStorage.setItem('congklak_player_name', myName); // Simpan nama
     window.history.replaceState({}, '', `?room=${myRoom}`);
 
     let { data: room, error: fetchError } = await db.from('rooms').select('*').eq('id', myRoom).single();
@@ -112,7 +147,7 @@ async function joinRoom() {
     if (currentRoom) { 
         gameState = currentRoom; 
         if (gameState.suit_winner && gameState.suit_winner !== 'SERI') window.gameStarted = true;
-        renderBoard(); 
+        checkGamePhase(); 
     }
 
     if (myChannel) db.removeChannel(myChannel);
@@ -122,13 +157,7 @@ async function joinRoom() {
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${myRoom}` }, (payload) => {
         if (!isAnimating) {
             gameState = payload.new;
-            if (gameState.p1_ready && gameState.p2_ready && !gameState.p1_suit && !gameState.p2_suit && !pregameCountdownInterval && !gameState.suit_winner) {
-                 startPregameCountdown();
-            }
-            if (gameState.p1_suit && gameState.p2_suit && !gameState.suit_winner && myRole === 1) {
-                 calculateSuitWinner();
-            }
-            renderBoard();
+            checkGamePhase();
         }
     })
     .on('broadcast', { event: 'chat' }, (payload) => {
@@ -172,9 +201,12 @@ function appendChatMessage(displayName, text, isMe) {
 async function clickReady() {
     const bgm = document.getElementById('bgm');
     bgm.volume = 0.2;
-    bgm.play().catch(e => console.log("BGM terblokir oleh browser", e));
+    bgm.play().catch(e => console.log("BGM butuh interaksi", e));
 
-    document.getElementById('pregame-ready-btn').classList.add('hidden');
+    const btn = document.getElementById('pregame-ready-btn');
+    btn.classList.add('hidden');
+    btn.disabled = true;
+
     let RumahKita = `p${myRole}_ready`;
     await db.from('rooms').update({ [RumahKita]: true }).eq('id', myRoom);
 }
@@ -223,8 +255,9 @@ async function calculateSuitWinner() {
     if (myRole !== 1) return; 
     const p1 = gameState.p1_suit;
     const p2 = gameState.p2_suit;
-    let winnerId = "SERI";
+    if (!p1 || !p2) return;
 
+    let winnerId = "SERI";
     if ((p1 === 'batu' && p2 === 'gunting') || (p1 === 'gunting' && p2 === 'kertas') || (p1 === 'kertas' && p2 === 'batu')) winnerId = "1"; 
     else if (p1 !== p2) winnerId = "2"; 
     
@@ -238,6 +271,7 @@ function renderBoard() {
     const mainBoardContainer = document.getElementById('main-board-container');
     const statusText = document.getElementById('status-panel');
 
+    // Tampilkan Hasil Suit
     if (gameState.p1_suit && gameState.p2_suit && !window.gameStarted) {
         document.getElementById('pregame-suit-countdown').classList.add('hidden');
         document.getElementById('pregame-suit-choices').classList.add('hidden');
@@ -282,6 +316,7 @@ function renderBoard() {
         return; 
     }
 
+    // Fase Main Game
     if (gameState.suit_winner && gameState.suit_winner !== 'SERI' && window.gameStarted) {
         pregamePanel.classList.add('hidden');
         mainBoardContainer.classList.remove('hidden');
@@ -311,7 +346,9 @@ function renderBoard() {
             statusText.innerText = `Menunggu ${currentPlayerName}...`;
             statusText.className = "text-xl font-bold text-amber-900 bg-amber-100 px-6 py-2 rounded-full shadow-sm";
         }
-    } else {
+    } 
+    // Fase Menunggu Ready
+    else {
         mainBoardContainer.classList.add('hidden');
         pregamePanel.classList.remove('hidden'); 
         
@@ -322,12 +359,24 @@ function renderBoard() {
              document.getElementById('pregame-ready-section').classList.remove('hidden');
              
              const RumahKita = `p${myRole}_ready`;
+             const btn = document.getElementById('pregame-ready-btn');
              if (gameState[RumahKita]) {
-                 document.getElementById('pregame-ready-btn').innerText = "Menunggu Lawan Siap...";
-                 document.getElementById('pregame-ready-btn').disabled = true;
+                 btn.innerText = "Menunggu Lawan Siap...";
+                 btn.disabled = true;
+                 btn.classList.remove('hidden');
              } else {
-                 document.getElementById('pregame-ready-btn').innerText = "Siap Bermain";
-                 document.getElementById('pregame-ready-btn').disabled = false;
+                 btn.innerText = "Siap Bermain";
+                 btn.disabled = false;
+                 btn.classList.remove('hidden');
+             }
+        } else {
+             document.getElementById('pregame-ready-section').classList.add('hidden');
+             const RumahKitaSuit = `p${myRole}_suit`;
+             if (gameState[RumahKitaSuit]) {
+                 document.getElementById('pregame-suit-choices').classList.add('hidden');
+                 const countdownDiv = document.getElementById('pregame-suit-countdown');
+                 countdownDiv.classList.remove('hidden');
+                 countdownDiv.innerHTML = `<div class="text-xl font-bold text-amber-600">Menunggu Lawan Memilih...</div>`;
              }
         }
         statusText.innerText = "Persiapan Permainan";
