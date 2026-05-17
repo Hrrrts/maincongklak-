@@ -5,6 +5,7 @@ const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let myRoom = "";
 let myRole = null;
+let isAnimating = false; // Kunci biar gak bisa diklik pas biji lagi jalan
 let myClientId = localStorage.getItem('congklak_client_id') || (() => {
     let id = Math.random().toString(36).substring(2, 11);
     localStorage.setItem('congklak_client_id', id);
@@ -40,11 +41,7 @@ async function joinRoom() {
             id: myRoom, board: initialBoard, current_player: 1, p1_id: myClientId
         }]).select().single();
 
-        if (insertError) {
-            alert("Gagal bikin room: " + insertError.message);
-            document.querySelector("button").innerText = "Gabung Game";
-            return;
-        }
+        if (insertError) return alert("Gagal bikin room!");
         room = newRoom;
     } else {
         if (room.p1_id === myClientId) {
@@ -52,17 +49,12 @@ async function joinRoom() {
         } else if (room.p2_id === myClientId || !room.p2_id) {
             myRole = 2;
             if (!room.p2_id) {
-                let { data: updatedRoom, error: updateError } = await db.from('rooms').update({ p2_id: myClientId }).eq('id', myRoom).select().single();
-                if (updateError) {
-                    alert("Gagal join room: " + updateError.message);
-                    document.querySelector("button").innerText = "Gabung Game";
-                    return;
-                }
+                let { data: updatedRoom } = await db.from('rooms').update({ p2_id: myClientId }).eq('id', myRoom).select().single();
                 room = updatedRoom;
             }
         } else {
             document.querySelector("button").innerText = "Gabung Game";
-            return alert("Waduh, room ini sudah penuh bor!");
+            return alert("Room ini sudah penuh bor!");
         }
     }
 
@@ -74,10 +66,14 @@ async function joinRoom() {
     gameState = room;
     renderBoard();
 
+    // Listen realtime perubahan dari musuh
     db.channel('any')
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${myRoom}` }, (payload) => {
-        gameState = payload.new;
-        renderBoard();
+        // Hanya update dari database kalau kita lagi gak jalanin animasi
+        if (!isAnimating) {
+            gameState = payload.new;
+            renderBoard();
+        }
     })
     .subscribe();
 }
@@ -93,6 +89,7 @@ function renderBoard() {
 
     document.getElementById('hole-7').innerText = gameState.board[7];
     document.getElementById('hole-15').innerText = gameState.board[15];
+    
     const statusText = document.getElementById('status-panel');
     
     if (gameState.game_over) {
@@ -103,7 +100,10 @@ function renderBoard() {
         return;
     }
 
-    if (gameState.current_player === myRole) {
+    if (isAnimating) {
+        statusText.innerText = "Biji lagi jalan...";
+        statusText.className = "text-xl font-bold text-blue-900 bg-blue-100 px-6 py-1.5 rounded-full shadow-sm";
+    } else if (gameState.current_player === myRole) {
         statusText.innerText = "Giliran KAMU! Gilas!";
         statusText.className = "text-xl font-bold text-emerald-900 bg-emerald-100 px-6 py-1.5 rounded-full shadow-sm";
     } else {
@@ -115,7 +115,9 @@ function renderBoard() {
 function createHoleHTML(index, count) {
     const isMyTurn = gameState.current_player === myRole;
     const isMyZone = (myRole === 1 && index >= 0 && index <= 6) || (myRole === 2 && index >= 8 && index <= 14);
-    const canClick = isMyTurn && isMyZone && count > 0 && !gameState.game_over;
+    // Kunci tombol kalau lagi animasi atau bukan giliran
+    const canClick = isMyTurn && isMyZone && count > 0 && !gameState.game_over && !isAnimating;
+    
     return `
         <button onclick="clickHole(${index})" ${!canClick ? 'disabled' : ''} class="w-full aspect-square bg-amber-100 disabled:opacity-80 disabled:cursor-not-allowed rounded-full flex items-center justify-center font-black text-amber-950 shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)] hover:bg-amber-200 active:scale-95 transition-all text-base md:text-xl border-2 border-amber-900/20">
             ${count}
@@ -130,40 +132,81 @@ function checkGameOver(board) {
     return p1Empty || p2Empty;
 }
 
+// Fungsi jeda untuk animasi
+const delay = ms => new Promise(res => setTimeout(res, ms));
+
 async function clickHole(holeIndex) {
+    isAnimating = true; // Kunci papan
+    renderBoard();
+
     let board = [...gameState.board];
     let p = gameState.current_player;
-    let seeds = board[holeIndex];
-    board[holeIndex] = 0;
     let currentIndex = holeIndex;
+    let isSowing = true;
+    let nextPlayer = p;
 
-    while (seeds > 0) {
-        currentIndex = (currentIndex + 1) % 16;
-        if (p === 1 && currentIndex === 15) continue;
-        if (p === 2 && currentIndex === 7) continue;
-        board[currentIndex]++;
-        seeds--;
-    }
+    // LOOP BESAR: Terus jalan selama jatuh di lubang yang ada isinya
+    while (isSowing) {
+        let seeds = board[currentIndex];
+        board[currentIndex] = 0;
 
-    let nextPlayer = p === 1 ? 2 : 1;
-    let isGameOver = false;
-    let winner = null;
+        // Render animasi saat ngambil biji
+        gameState.board = [...board];
+        renderBoard();
+        await delay(300);
 
-    if ((p === 1 && currentIndex === 7) || (p === 2 && currentIndex === 15)) {
-        nextPlayer = p;
-    } else if (board[currentIndex] === 1) {
-        const isP1Zone = currentIndex >= 0 && currentIndex <= 6;
-        const isP2Zone = currentIndex >= 8 && currentIndex <= 14;
-        if ((p === 1 && isP1Zone) || (p === 2 && isP2Zone)) {
-            const oppositeIndex = 14 - currentIndex;
-            if (board[oppositeIndex] > 0) {
-                let RumahKita = (p === 1) ? 7 : 15;
-                board[RumahKita] += board[oppositeIndex] + 1;
-                board[oppositeIndex] = 0;
-                board[currentIndex] = 0;
+        // LOOP KECIL: Membagikan biji satu per satu
+        while (seeds > 0) {
+            currentIndex = (currentIndex + 1) % 16;
+            
+            // Lewati rumah musuh
+            if (p === 1 && currentIndex === 15) continue;
+            if (p === 2 && currentIndex === 7) continue;
+
+            board[currentIndex]++;
+            seeds--;
+
+            // Render animasi tiap kali naruh biji
+            gameState.board = [...board];
+            renderBoard();
+            await delay(400); // Kecepatan jalan biji (400ms)
+        }
+
+        // EVALUASI: Biji terakhir jatuh di mana?
+        if ((p === 1 && currentIndex === 7) || (p === 2 && currentIndex === 15)) {
+            // 1. Jatuh di rumah sendiri -> Dapat giliran lagi, animasi berhenti
+            isSowing = false;
+            nextPlayer = p;
+        } else if (board[currentIndex] === 1) {
+            // 2. Jatuh di lubang kosong (sekarang isinya 1 karena barusan ditaruh) -> Mati/Nembak
+            isSowing = false;
+            nextPlayer = p === 1 ? 2 : 1;
+
+            const isP1Zone = currentIndex >= 0 && currentIndex <= 6;
+            const isP2Zone = currentIndex >= 8 && currentIndex <= 14;
+            
+            if ((p === 1 && isP1Zone) || (p === 2 && isP2Zone)) {
+                const oppositeIndex = 14 - currentIndex;
+                if (board[oppositeIndex] > 0) {
+                    await delay(600); // Jeda dramatis sebelum nembak
+                    let RumahKita = (p === 1) ? 7 : 15;
+                    board[RumahKita] += board[oppositeIndex] + 1;
+                    board[oppositeIndex] = 0;
+                    board[currentIndex] = 0;
+                    
+                    gameState.board = [...board];
+                    renderBoard();
+                    await delay(500);
+                }
             }
+        } else {
+            // 3. Jatuh di lubang yang ADA isinya -> Ambil lagi semua isinya, LANJUT JALAN!
+            await delay(500); // Jeda sebentar sebelum ngambil biji lagi
         }
     }
+
+    let isGameOver = false;
+    let winner = null;
 
     if (checkGameOver(board)) {
         for (let i = 0; i < 7; i++) { board[7] += board[i]; board[i] = 0; }
@@ -172,6 +215,9 @@ async function clickHole(holeIndex) {
         winner = board[7] > board[15] ? "1" : (board[15] > board[7] ? "2" : "SERI");
     }
 
+    isAnimating = false; // Buka kunci papan
+
+    // Tembak hasil akhirnya ke Supabase biar layar musuh ikut ke-update
     await db.from('rooms').update({
         board: board,
         current_player: nextPlayer,
