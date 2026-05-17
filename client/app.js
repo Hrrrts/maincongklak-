@@ -5,11 +5,13 @@ const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let myRoom = "";
 let myRole = null;
-let myChannel = null; // Buat nampung koneksi Realtime
-let isAnimating = false; 
-let myClientId = localStorage.getItem('congklak_client_id') || (() => {
+let myChannel = null;
+let isAnimating = false;
+
+// FIX: Ganti localStorage jadi sessionStorage biar bisa ngetes di banyak tab
+let myClientId = sessionStorage.getItem('congklak_client_id') || (() => {
     let id = Math.random().toString(36).substring(2, 11);
-    localStorage.setItem('congklak_client_id', id);
+    sessionStorage.setItem('congklak_client_id', id);
     return id;
 })();
 
@@ -39,7 +41,7 @@ async function joinRoom() {
     if (!room) {
         myRole = 1;
         let { data: newRoom, error: insertError } = await db.from('rooms').insert([{
-            id: myRoom, board: initialBoard, current_player: 1, p1_id: myClientId
+            id: myRoom, board: initialBoard, current_player: 1, p1_id: myClientId, p2_id: null // Pastikan p2_id kosong
         }]).select().single();
 
         if (insertError) return alert("Gagal bikin room!");
@@ -47,19 +49,18 @@ async function joinRoom() {
     } else {
         if (room.p1_id === myClientId) {
             myRole = 1;
-        } else if (room.p2_id === myClientId || !room.p2_id) {
+        } else if (room.p2_id === myClientId) {
+            myRole = 2; // Kalau ngereload tab yang udah jadi P2
+        } else if (!room.p2_id) {
             myRole = 2;
-            if (!room.p2_id) {
-                let { data: updatedRoom } = await db.from('rooms').update({ p2_id: myClientId }).eq('id', myRoom).select().single();
-                room = updatedRoom;
-            }
+            let { data: updatedRoom } = await db.from('rooms').update({ p2_id: myClientId }).eq('id', myRoom).select().single();
+            room = updatedRoom;
         } else {
             document.querySelector("button").innerText = "Gabung Game";
             return alert("Room ini sudah penuh bor!");
         }
     }
 
-    // Tampilkan Area Game & Chat
     document.getElementById('role-indicator').innerText = `KAMU ADALAH: PLAYER ${myRole}`;
     document.getElementById('chat-room-id').innerText = `ROOM: ${myRoom}`;
     document.getElementById('lobby').classList.add('hidden');
@@ -68,9 +69,9 @@ async function joinRoom() {
     gameState = room;
     renderBoard();
 
-    // Inisialisasi Koneksi Realtime (Gerakan + Chat)
+    if (myChannel) db.removeChannel(myChannel); // Bersihin channel lama kalau ada
+
     myChannel = db.channel('room_' + myRoom);
-    
     myChannel
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${myRoom}` }, (payload) => {
         if (!isAnimating) {
@@ -79,22 +80,18 @@ async function joinRoom() {
         }
     })
     .on('broadcast', { event: 'chat' }, (payload) => {
-        // Nerima chat dari musuh
         appendChatMessage(payload.payload.sender, payload.payload.text, false);
     })
     .subscribe();
 }
 
-// === SISTEM LIVE CHAT ===
 function sendChat() {
     const input = document.getElementById('chat-input');
     const text = input.value.trim();
     if (!text) return;
 
-    // Munculin di layar sendiri
     appendChatMessage(myRole, text, true);
     
-    // Siarkan ke musuh via Supabase Broadcast
     myChannel.send({
         type: 'broadcast',
         event: 'chat',
@@ -116,10 +113,9 @@ function appendChatMessage(senderRole, text, isMe) {
     msgDiv.innerHTML = `<div class="text-[10px] font-bold ${nameColor} mb-0.5 uppercase tracking-wide">${nameText}</div><div>${text}</div>`;
     
     container.appendChild(msgDiv);
-    container.scrollTop = container.scrollHeight; // Auto scroll ke bawah
+    container.scrollTop = container.scrollHeight;
 }
 
-// === SISTEM PAPAN CONGKLAK ===
 function renderBoard() {
     const p1Container = document.getElementById('p1-holes');
     const p2Container = document.getElementById('p2-holes');
@@ -159,7 +155,6 @@ function createHoleHTML(index, count) {
     const isMyZone = (myRole === 1 && index >= 0 && index <= 6) || (myRole === 2 && index >= 8 && index <= 14);
     const canClick = isMyTurn && isMyZone && count > 0 && !gameState.game_over && !isAnimating;
     
-    // Perbaikan CSS Biar Tombolnya Bulet Sempurna & Rapi (w-12 h-12)
     return `
         <button onclick="clickHole(${index})" ${!canClick ? 'disabled' : ''} class="w-12 h-12 md:w-16 md:h-16 bg-amber-100 disabled:opacity-90 disabled:cursor-not-allowed rounded-full flex items-center justify-center font-black text-amber-950 shadow-[inset_0_3px_6px_rgba(0,0,0,0.4)] hover:bg-amber-200 active:scale-90 transition-all text-lg md:text-2xl border-[3px] border-amber-900/10 shrink-0">
             ${count}
