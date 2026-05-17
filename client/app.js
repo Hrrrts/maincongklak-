@@ -9,6 +9,8 @@ let myRole = null;
 let myChannel = null;
 let isAnimating = false;
 let pregameCountdownInterval = null;
+window.gameStarted = false; // Flag untuk transisi dari suit ke permainan
+window.suitResultTimer = null;
 
 let myClientId = sessionStorage.getItem('congklak_client_id') || (() => {
     let id = Math.random().toString(36).substring(2, 11);
@@ -25,10 +27,10 @@ window.onload = () => {
 async function joinRoom() {
     const roomInput = document.getElementById('room-input').value.trim().toUpperCase();
     const nameInput = document.getElementById('name-input').value.trim();
-    if (!roomInput) return alert("Isi kode room dulu bor!");
-    if (!nameInput) return alert("Isi nama kamu dulu bor!");
+    if (!roomInput) return alert("Silakan masukkan kode ruangan.");
+    if (!nameInput) return alert("Silakan masukkan nama Anda.");
     
-    document.querySelector("#lobby button").innerText = "Loading...";
+    document.querySelector("#lobby button").innerText = "Memuat...";
     myRoom = roomInput;
     myName = nameInput; 
 
@@ -36,7 +38,7 @@ async function joinRoom() {
 
     if (fetchError && fetchError.code !== 'PGRST116') {
         alert("Error Database: " + fetchError.message);
-        document.querySelector("#lobby button").innerText = "Gabung Game";
+        document.querySelector("#lobby button").innerText = "Masuk Ruangan";
         return;
     }
 
@@ -44,9 +46,7 @@ async function joinRoom() {
 
     if (!room) {
         myRole = 1;
-        await db.from('rooms').insert([{
-            id: myRoom, board: initialBoard, current_player: 1, p1_id: myClientId, p1_name: myName, p2_id: null, p2_name: ""
-        }]);
+        await db.from('rooms').insert([{ id: myRoom, board: initialBoard, current_player: 1, p1_id: myClientId, p1_name: myName, p2_id: null, p2_name: "" }]);
     } else {
         if (room.p1_id === myClientId) {
             myRole = 1;
@@ -58,17 +58,21 @@ async function joinRoom() {
             myRole = 2;
             await db.from('rooms').update({ p2_id: myClientId, p2_name: myName, p1_ready: false, p2_ready: false, p1_suit: null, p2_suit: null, suit_winner: null }).eq('id', myRoom);
         } else {
-            document.querySelector("#lobby button").innerText = "Gabung Game";
-            return alert("Waduh, room ini sudah penuh bor!");
+            document.querySelector("#lobby button").innerText = "Masuk Ruangan";
+            return alert("Maaf, ruangan ini sudah penuh.");
         }
     }
 
-    document.getElementById('chat-room-id').innerText = `ROOM: ${myRoom}`;
+    document.getElementById('chat-room-id').innerText = `KODE: ${myRoom}`;
     document.getElementById('lobby').classList.add('hidden');
     document.getElementById('game-area').classList.remove('hidden');
 
     let { data: currentRoom } = await db.from('rooms').select('*').eq('id', myRoom).single();
-    if (currentRoom) { gameState = currentRoom; renderBoard(); }
+    if (currentRoom) { 
+        gameState = currentRoom; 
+        if (gameState.suit_winner && gameState.suit_winner !== 'SERI') window.gameStarted = true;
+        renderBoard(); 
+    }
 
     if (myChannel) db.removeChannel(myChannel);
     myChannel = db.channel('room_' + myRoom);
@@ -77,17 +81,17 @@ async function joinRoom() {
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${myRoom}` }, (payload) => {
         if (!isAnimating) {
             gameState = payload.new;
-            if (gameState.p1_ready && gameState.p2_ready && gameState.p1_suit === null && gameState.p2_suit === null && pregameCountdownInterval === null) {
+            if (gameState.p1_ready && gameState.p2_ready && !gameState.p1_suit && !gameState.p2_suit && !pregameCountdownInterval && !gameState.suit_winner) {
                  startPregameCountdown();
-            } else if (gameState.p1_suit && gameState.p2_suit && !gameState.suit_winner && pregameCountdownInterval === null) {
-                 calculateSuitWinner();
-            } else {
-                 renderBoard();
             }
+            if (gameState.p1_suit && gameState.p2_suit && !gameState.suit_winner && myRole === 1) {
+                 calculateSuitWinner();
+            }
+            renderBoard();
         }
     })
     .on('broadcast', { event: 'chat' }, (payload) => {
-        appendChatMessage(payload.payload.senderName || `Player`, payload.payload.text, false);
+        appendChatMessage(payload.payload.senderName || `Lawan`, payload.payload.text, false);
     })
     .subscribe();
 }
@@ -96,8 +100,7 @@ function sendChat() {
     const input = document.getElementById('chat-input');
     const text = input.value.trim();
     if (!text) return;
-
-    appendChatMessage("Kamu", text, true);
+    appendChatMessage("Anda", text, true);
     myChannel.send({ type: 'broadcast', event: 'chat', payload: { senderName: myName, text: text } });
     input.value = '';
 }
@@ -123,22 +126,19 @@ async function clickReady() {
 
 function startPregameCountdown() {
     isAnimating = true;
-    
-    // FIX BUG: Jangan sembunyikan pregame-panel (Bapaknya), sembunyikan Ready Section aja!
     document.getElementById('pregame-ready-section').classList.add('hidden');
-    
+    document.getElementById('pregame-suit-result').classList.add('hidden');
     const countdownDiv = document.getElementById('pregame-suit-countdown');
     countdownDiv.classList.remove('hidden');
     countdownDiv.innerHTML = `
-        <div class="text-xs uppercase font-bold text-amber-600 tracking-wider">Bersiap Suit Dalam...</div>
+        <div class="text-xs uppercase font-bold text-amber-600 tracking-wider">Bersiap Memilih Dalam...</div>
         <div id="pregame-suit-seconds" class="text-7xl font-black">5</div>
     `;
     
     let secondsLeft = 5;
-    const counterDisplay = document.getElementById('pregame-suit-seconds');
-
     pregameCountdownInterval = setInterval(() => {
         secondsLeft--;
+        const counterDisplay = document.getElementById('pregame-suit-seconds');
         if (counterDisplay) counterDisplay.innerText = secondsLeft;
         if (secondsLeft <= 0) {
             clearInterval(pregameCountdownInterval);
@@ -156,86 +156,99 @@ function showSuitChoices() {
 
 async function clickSuit(choice) {
     document.getElementById('pregame-suit-choices').classList.add('hidden');
-    
     const countdownDiv = document.getElementById('pregame-suit-countdown');
     countdownDiv.classList.remove('hidden');
-    countdownDiv.innerHTML = `<div class="text-xl font-bold text-amber-600">Menunggu Musuh Milih...</div>`;
+    countdownDiv.innerHTML = `<div class="text-xl font-bold text-amber-600">Menunggu Lawan Memilih...</div>`;
     
     let RumahKita = `p${myRole}_suit`;
     await db.from('rooms').update({ [RumahKita]: choice }).eq('id', myRoom);
 }
 
-function calculateSuitWinner() {
+async function calculateSuitWinner() {
+    if (myRole !== 1) return; // Mencegah update ganda, P1 yang jadi wasit
     const p1 = gameState.p1_suit;
     const p2 = gameState.p2_suit;
-    let winnerId = null;
+    let winnerId = "SERI";
 
-    if (p1 === p2) winnerId = "SERI";
-    else if ((p1 === 'batu' && p2 === 'gunting') || (p1 === 'gunting' && p2 === 'kertas') || (p1 === 'kertas' && p2 === 'batu')) winnerId = "1"; 
-    else winnerId = "2"; 
+    if ((p1 === 'batu' && p2 === 'gunting') || (p1 === 'gunting' && p2 === 'kertas') || (p1 === 'kertas' && p2 === 'batu')) winnerId = "1"; 
+    else if (p1 !== p2) winnerId = "2"; 
     
-    updateSuitWinnerOnDB(winnerId);
-}
-
-async function updateSuitWinnerOnDB(winnerId) {
-    isAnimating = true; 
-
-    if (winnerId === "SERI") {
-        await db.from('rooms').update({ p1_suit: null, p2_suit: null }).eq('id', myRoom);
-    } else {
-        const firstPlayerNumber = parseInt(winnerId);
-        await db.from('rooms').update({ suit_winner: winnerId, current_player: firstPlayerNumber }).eq('id', myRoom);
-    }
-    
-    isAnimating = false;
-    renderBoard();
+    const updateData = { suit_winner: winnerId };
+    if (winnerId !== "SERI") updateData.current_player = parseInt(winnerId);
+    await db.from('rooms').update(updateData).eq('id', myRoom);
 }
 
 function renderBoard() {
-    const p1Container = document.getElementById('p1-holes');
-    const p2Container = document.getElementById('p2-holes');
     const pregamePanel = document.getElementById('pregame-panel');
     const mainBoardContainer = document.getElementById('main-board-container');
-    p1Container.innerHTML = '';
-    p2Container.innerHTML = '';
+    const statusText = document.getElementById('status-panel');
 
-    const p1NameTag = gameState.p1_name || "Menunggu Player 1...";
-    const p2NameTag = gameState.p2_name || "Menunggu Player 2...";
-    document.getElementById('hole-7-name').innerText = p1NameTag;
-    document.getElementById('hole-15-name').innerText = p2NameTag;
+    // 1. Tampilkan Hasil Suit jika keduanya sudah memilih
+    if (gameState.p1_suit && gameState.p2_suit && !window.gameStarted) {
+        document.getElementById('pregame-suit-countdown').classList.add('hidden');
+        document.getElementById('pregame-suit-choices').classList.add('hidden');
+        document.getElementById('pregame-ready-section').classList.add('hidden');
+        
+        const resultDiv = document.getElementById('pregame-suit-result');
+        resultDiv.classList.remove('hidden');
 
-    if (gameState.game_over) {
-        pregamePanel.classList.add('hidden');
-        mainBoardContainer.classList.remove('hidden');
-        renderGameHoles(); 
-
-        document.getElementById('hole-7').innerText = gameState.board[7];
-        document.getElementById('hole-15').innerText = gameState.board[15];
-        const statusText = document.getElementById('status-panel');
-        if (gameState.winner === "SERI") statusText.innerText = "GAME OVER: Hasil SERI!";
-        else if (parseInt(gameState.winner) === myRole) statusText.innerText = "KAMU MENANG! 🎉";
-        else {
-             const winnerName = (gameState.winner === "1") ? gameState.p1_name : gameState.p2_name;
-             statusText.innerText = `${winnerName} Menang!`;
+        const icons = { batu: '✊', kertas: '✋', gunting: '✌️' };
+        let winText = "Menghitung hasil...";
+        let textStyle = "text-amber-600";
+        
+        if (gameState.suit_winner) {
+            if (gameState.suit_winner === 'SERI') { winText = "HASIL SERI! Mengulang suit..."; textStyle = "text-blue-600"; }
+            else if (gameState.suit_winner === myRole.toString()) { winText = "ANDA MENANG! Jalan pertama."; textStyle = "text-emerald-600"; }
+            else { winText = "LAWAN MENANG. Harap tunggu."; textStyle = "text-rose-600"; }
         }
-        statusText.className = "text-xl font-bold text-rose-900 bg-rose-100 px-6 py-2 rounded-full shadow-sm";
-        return;
+
+        resultDiv.innerHTML = `
+            <div class="text-sm font-bold text-amber-600 mb-2 uppercase tracking-widest">Hasil Pilihan</div>
+            <div class="flex justify-center gap-8 items-center mb-4 text-4xl">
+                <div class="text-center"><div class="text-xs text-amber-800 mb-2">${gameState.p1_name || 'Player 1'}</div>${icons[gameState.p1_suit]}</div>
+                <div class="text-2xl font-black text-amber-400">VS</div>
+                <div class="text-center"><div class="text-xs text-amber-800 mb-2">${gameState.p2_name || 'Player 2'}</div>${icons[gameState.p2_suit]}</div>
+            </div>
+            <div class="text-xl font-black ${textStyle}">${winText}</div>
+        `;
+
+        if (gameState.suit_winner && !window.suitResultTimer) {
+            window.suitResultTimer = setTimeout(async () => {
+                window.suitResultTimer = null;
+                resultDiv.classList.add('hidden'); 
+                if (gameState.suit_winner === 'SERI') {
+                    if (myRole === 1) await db.from('rooms').update({ p1_suit: null, p2_suit: null, suit_winner: null }).eq('id', myRoom);
+                } else {
+                    window.gameStarted = true;
+                    renderBoard();
+                }
+            }, 3500);
+        }
+        
+        statusText.innerText = "Fase Penentuan";
+        statusText.className = "text-xl font-bold text-amber-900 bg-amber-100 px-6 py-2 rounded-full shadow-sm";
+        return; 
     }
 
-    if (gameState.suit_winner) {
+    // 2. Fase Permainan
+    if (gameState.suit_winner && gameState.suit_winner !== 'SERI' && window.gameStarted) {
         pregamePanel.classList.add('hidden');
         mainBoardContainer.classList.remove('hidden');
         renderGameHoles();
 
-        document.getElementById('hole-7').innerText = gameState.board[7];
-        document.getElementById('hole-15').innerText = gameState.board[15];
-        const statusText = document.getElementById('status-panel');
-
-        if (isAnimating) {
-            statusText.innerText = "Biji lagi jalan...";
+        if (gameState.game_over) {
+            if (gameState.winner === "SERI") statusText.innerText = "PERMAINAN SELESAI: HASIL SERI!";
+            else if (parseInt(gameState.winner) === myRole) statusText.innerText = "ANDA MENANG! 🎉";
+            else {
+                 const winnerName = (gameState.winner === "1") ? gameState.p1_name : gameState.p2_name;
+                 statusText.innerText = `${winnerName} Memenangkan Permainan.`;
+            }
+            statusText.className = "text-xl font-bold text-rose-900 bg-rose-100 px-6 py-2 rounded-full shadow-sm";
+        } else if (isAnimating) {
+            statusText.innerText = "Sedang membagikan biji...";
             statusText.className = "text-xl font-bold text-blue-900 bg-blue-100 px-6 py-2 rounded-full shadow-sm animate-pulse";
         } else if (gameState.current_player === myRole) {
-            statusText.innerText = "Giliran KAMU! Gilas!";
+            statusText.innerText = "Giliran Anda.";
             statusText.className = "text-xl font-bold text-emerald-900 bg-emerald-100 px-6 py-2 rounded-full shadow-sm";
         } else {
             const currentPlayerName = (gameState.current_player === 1) ? gameState.p1_name : gameState.p2_name;
@@ -243,59 +256,70 @@ function renderBoard() {
             statusText.className = "text-xl font-bold text-amber-900 bg-amber-100 px-6 py-2 rounded-full shadow-sm";
         }
     } 
+    // 3. Fase Menunggu (Ready)
     else {
         mainBoardContainer.classList.add('hidden');
-        pregamePanel.classList.remove('hidden'); // Pastikan Parent-nya kelihatan
+        pregamePanel.classList.remove('hidden'); 
         
-        if (gameState.p1_ready && gameState.p2_ready) {
-             document.getElementById('pregame-ready-section').classList.add('hidden');
-             const RumahKitaSuit = `p${myRole}_suit`;
-             
-             if (gameState[RumahKitaSuit]) {
-                 document.getElementById('pregame-suit-choices').classList.add('hidden');
-                 const countdownDiv = document.getElementById('pregame-suit-countdown');
-                 countdownDiv.classList.remove('hidden');
-                 countdownDiv.innerHTML = `<div class="text-xl font-bold text-amber-600">Menunggu Musuh Milih...</div>`;
-             } else if (!isAnimating) {
-                 document.getElementById('pregame-suit-countdown').classList.add('hidden');
-                 document.getElementById('pregame-suit-choices').classList.remove('hidden');
-             }
-        } else {
+        if (!gameState.p1_ready || !gameState.p2_ready) {
              document.getElementById('pregame-suit-countdown').classList.add('hidden');
              document.getElementById('pregame-suit-choices').classList.add('hidden');
+             document.getElementById('pregame-suit-result').classList.add('hidden');
              document.getElementById('pregame-ready-section').classList.remove('hidden');
              
              const RumahKita = `p${myRole}_ready`;
              if (gameState[RumahKita]) {
-                 document.getElementById('pregame-ready-btn').innerText = "Menunggu Musuh Ready...";
+                 document.getElementById('pregame-ready-btn').innerText = "Menunggu Lawan Siap...";
                  document.getElementById('pregame-ready-btn').disabled = true;
              } else {
-                 document.getElementById('pregame-ready-btn').innerText = "Saya Ready Bor!";
+                 document.getElementById('pregame-ready-btn').innerText = "Siap Bermain";
                  document.getElementById('pregame-ready-btn').disabled = false;
              }
-             document.getElementById('pregame-ready-status').innerText = "Pencet tombol kalau siap:";
         }
-        
-        const statusText = document.getElementById('status-panel');
-        if (gameState.p1_suit && gameState.p2_suit) statusText.innerText = "Mengkalkulasi Suit...";
-        else if (pregameCountdownInterval) statusText.innerText = "Bersiap Suit!";
-        else if (gameState.p1_ready && gameState.p2_ready) statusText.innerText = "Giliran Suit!";
-        else statusText.innerText = "Pre-Game: Menunggu Ready";
+        statusText.innerText = "Persiapan Permainan";
         statusText.className = "text-xl font-bold text-amber-900 bg-amber-100 px-6 py-2 rounded-full shadow-sm";
     }
 }
 
 function renderGameHoles() {
-    const p1Container = document.getElementById('p1-holes');
-    const p2Container = document.getElementById('p2-holes');
-    for (let i = 0; i < 7; i++) { p1Container.innerHTML += createHoleHTML(i, gameState.board[i]); }
-    for (let i = 14; i >= 8; i--) { p2Container.innerHTML += createHoleHTML(i, gameState.board[i]); }
+    const topContainer = document.getElementById('holes-top');
+    const bottomContainer = document.getElementById('holes-bottom');
+    topContainer.innerHTML = '';
+    bottomContainer.innerHTML = '';
+
+    let bottomIndices, topIndices, leftStoreIndex, rightStoreIndex;
+    let leftName, rightName;
+
+    // Logika Perspektif: Rumah sendiri SELALU di kiri, baris sendiri SELALU di bawah.
+    if (myRole === 1 || myRole === null) {
+        bottomIndices = [6, 5, 4, 3, 2, 1, 0]; // 0 paling kanan, bergerak ke kiri
+        topIndices    = [8, 9, 10, 11, 12, 13, 14]; // 8 paling kiri, bergerak ke kanan
+        leftStoreIndex = 7;
+        rightStoreIndex = 15;
+        leftName = gameState.p1_name || "Player 1";
+        rightName = gameState.p2_name || "Player 2";
+    } else {
+        bottomIndices = [14, 13, 12, 11, 10, 9, 8]; 
+        topIndices    = [0, 1, 2, 3, 4, 5, 6]; 
+        leftStoreIndex = 15;
+        rightStoreIndex = 7;
+        leftName = gameState.p2_name || "Player 2";
+        rightName = gameState.p1_name || "Player 1";
+    }
+
+    document.getElementById('store-left-name').innerText = `RUMAH: ${leftName}`;
+    document.getElementById('store-right-name').innerText = `RUMAH: ${rightName}`;
+    document.getElementById('store-left').innerText = gameState.board[leftStoreIndex];
+    document.getElementById('store-right').innerText = gameState.board[rightStoreIndex];
+
+    bottomIndices.forEach(idx => { bottomContainer.innerHTML += createHoleHTML(idx, gameState.board[idx]); });
+    topIndices.forEach(idx => { topContainer.innerHTML += createHoleHTML(idx, gameState.board[idx]); });
 }
 
 function createHoleHTML(index, count) {
     const isMyTurn = gameState.current_player === myRole;
     const isMyZone = (myRole === 1 && index >= 0 && index <= 6) || (myRole === 2 && index >= 8 && index <= 14);
-    const canClick = isMyTurn && isMyZone && count > 0 && !gameState.game_over && !isAnimating && gameState.suit_winner;
+    const canClick = isMyTurn && isMyZone && count > 0 && !gameState.game_over && !isAnimating && window.gameStarted;
     
     return `
         <button onclick="clickHole(${index})" ${!canClick ? 'disabled' : ''} class="w-12 h-12 md:w-16 md:h-16 bg-amber-100 disabled:opacity-90 disabled:cursor-not-allowed rounded-full flex items-center justify-center font-black text-amber-950 shadow-[inset_0_3px_6px_rgba(0,0,0,0.4)] hover:bg-amber-200 active:scale-90 transition-all text-lg md:text-2xl border-[3px] border-amber-900/10 shrink-0">
@@ -314,7 +338,7 @@ function checkGameOver(board) {
 const delay = ms => new Promise(res => setTimeout(res, ms));
 
 async function clickHole(holeIndex) {
-    if (!gameState.suit_winner) return; 
+    if (!window.gameStarted) return; 
     isAnimating = true; 
     renderBoard();
 
