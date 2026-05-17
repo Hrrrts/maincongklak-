@@ -1,5 +1,5 @@
 const SUPABASE_URL = "https://dcfgjrfxnoeumusesbeo.supabase.co";
-const SUPABASE_ANON_KEY = "Sb_publishable_WpZlTTKYU9ITQkkpKSrqSQ_8_vRcidn";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRjZmdqcmZ4bm9ldW11c2VzYmVvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3ODk2MzU4OSwiZXhwIjoyMDk0NTM5NTg5fQ.vt7Cbda1MnRRIzcSWia79HewVLnYTkIqM_dALx0euSY";
 
 const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -24,10 +24,8 @@ async function joinRoom() {
     document.querySelector("button").innerText = "Loading...";
     myRoom = roomInput;
 
-    // Tarik data room, tangkap error jika ada
     let { data: room, error: fetchError } = await db.from('rooms').select('*').eq('id', myRoom).single();
 
-    // Abaikan error PGRST116 (artinya room belum ada/wajar)
     if (fetchError && fetchError.code !== 'PGRST116') {
         alert("Error Database: " + fetchError.message);
         document.querySelector("button").innerText = "Gabung Game";
@@ -38,7 +36,6 @@ async function joinRoom() {
 
     if (!room) {
         myRole = 1;
-        // Langsung insert dan select datanya sekaligus
         let { data: newRoom, error: insertError } = await db.from('rooms').insert([{
             id: myRoom, board: initialBoard, current_player: 1, p1_id: myClientId
         }]).select().single();
@@ -74,11 +71,9 @@ async function joinRoom() {
     document.getElementById('game-info').classList.remove('hidden');
     document.getElementById('game-board').classList.remove('hidden');
 
-    // Karena room sekarang dipastikan tidak null, render pasti berjalan
     gameState = room;
     renderBoard();
 
-    // Listen realtime
     db.channel('any')
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${myRoom}` }, (payload) => {
         gameState = payload.new;
