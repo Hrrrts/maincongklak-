@@ -9,7 +9,7 @@ let myRole = null;
 let myChannel = null;
 let isAnimating = false;
 let pregameCountdownInterval = null;
-window.gameStarted = false; // Flag untuk transisi dari suit ke permainan
+window.gameStarted = false; 
 window.suitResultTimer = null;
 
 let myClientId = sessionStorage.getItem('congklak_client_id') || (() => {
@@ -21,8 +21,27 @@ let myClientId = sessionStorage.getItem('congklak_client_id') || (() => {
 let gameState = { board: new Array(16).fill(0), current_player: 1, game_over: false, winner: null, p1_ready: false, p2_ready: false, p1_suit: null, p2_suit: null, suit_winner: null, p1_name: "", p2_name: "" };
 
 window.onload = () => {
-    document.getElementById('room-input').value = Math.random().toString(36).substring(2, 6).toUpperCase();
+    // FITUR AUTO-JOIN: Cek URL apakah ada embel-embel ?room=KODE
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomFromUrl = urlParams.get('room');
+    
+    if (roomFromUrl) {
+        document.getElementById('room-input').value = roomFromUrl.toUpperCase();
+    } else {
+        document.getElementById('room-input').value = Math.random().toString(36).substring(2, 6).toUpperCase();
+    }
 };
+
+// FITUR SHARE KE WHATSAPP
+function shareWhatsApp() {
+    // Ambil URL web saat ini tanpa embel-embel query di belakangnya
+    const appUrl = window.location.href.split('?')[0];
+    const shareLink = `${appUrl}?room=${myRoom}`;
+    const message = `Ayo main Congklak Online!\n\nKlik link ini buat langsung masuk ke ruangan:\n${shareLink}\n\nAtau masukin kode manual: *${myRoom}*`;
+    
+    const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
+    window.open(waUrl, '_blank');
+}
 
 async function joinRoom() {
     const roomInput = document.getElementById('room-input').value.trim().toUpperCase();
@@ -33,6 +52,9 @@ async function joinRoom() {
     document.querySelector("#lobby button").innerText = "Memuat...";
     myRoom = roomInput;
     myName = nameInput; 
+
+    // Update URL bar agar rapi dan bisa di-copy
+    window.history.replaceState({}, '', `?room=${myRoom}`);
 
     let { data: room, error: fetchError } = await db.from('rooms').select('*').eq('id', myRoom).single();
 
@@ -165,7 +187,7 @@ async function clickSuit(choice) {
 }
 
 async function calculateSuitWinner() {
-    if (myRole !== 1) return; // Mencegah update ganda, P1 yang jadi wasit
+    if (myRole !== 1) return; 
     const p1 = gameState.p1_suit;
     const p2 = gameState.p2_suit;
     let winnerId = "SERI";
@@ -183,7 +205,6 @@ function renderBoard() {
     const mainBoardContainer = document.getElementById('main-board-container');
     const statusText = document.getElementById('status-panel');
 
-    // 1. Tampilkan Hasil Suit jika keduanya sudah memilih
     if (gameState.p1_suit && gameState.p2_suit && !window.gameStarted) {
         document.getElementById('pregame-suit-countdown').classList.add('hidden');
         document.getElementById('pregame-suit-choices').classList.add('hidden');
@@ -230,7 +251,6 @@ function renderBoard() {
         return; 
     }
 
-    // 2. Fase Permainan
     if (gameState.suit_winner && gameState.suit_winner !== 'SERI' && window.gameStarted) {
         pregamePanel.classList.add('hidden');
         mainBoardContainer.classList.remove('hidden');
@@ -256,7 +276,6 @@ function renderBoard() {
             statusText.className = "text-xl font-bold text-amber-900 bg-amber-100 px-6 py-2 rounded-full shadow-sm";
         }
     } 
-    // 3. Fase Menunggu (Ready)
     else {
         mainBoardContainer.classList.add('hidden');
         pregamePanel.classList.remove('hidden'); 
@@ -290,10 +309,9 @@ function renderGameHoles() {
     let bottomIndices, topIndices, leftStoreIndex, rightStoreIndex;
     let leftName, rightName;
 
-    // Logika Perspektif: Rumah sendiri SELALU di kiri, baris sendiri SELALU di bawah.
     if (myRole === 1 || myRole === null) {
-        bottomIndices = [6, 5, 4, 3, 2, 1, 0]; // 0 paling kanan, bergerak ke kiri
-        topIndices    = [8, 9, 10, 11, 12, 13, 14]; // 8 paling kiri, bergerak ke kanan
+        bottomIndices = [6, 5, 4, 3, 2, 1, 0]; 
+        topIndices    = [8, 9, 10, 11, 12, 13, 14]; 
         leftStoreIndex = 7;
         rightStoreIndex = 15;
         leftName = gameState.p1_name || "Player 1";
