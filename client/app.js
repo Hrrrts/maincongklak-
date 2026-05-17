@@ -11,6 +11,8 @@ let isAnimating = false;
 let pregameCountdownInterval = null;
 window.gameStarted = false; 
 window.suitResultTimer = null;
+window.activeHole = null; // Menandai lubang yang sedang aktif
+window.confettiFired = false;
 
 let myClientId = sessionStorage.getItem('congklak_client_id') || (() => {
     let id = Math.random().toString(36).substring(2, 11);
@@ -20,11 +22,29 @@ let myClientId = sessionStorage.getItem('congklak_client_id') || (() => {
 
 let gameState = { board: new Array(16).fill(0), current_player: 1, game_over: false, winner: null, p1_ready: false, p2_ready: false, p1_suit: null, p2_suit: null, suit_winner: null, p1_name: "", p2_name: "" };
 
+// --- SFX & VIBRATION ---
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function playDropSound() {
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.05);
+    gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.1);
+}
+function triggerVibrate() {
+    if (navigator.vibrate) navigator.vibrate(30);
+}
+
 window.onload = () => {
-    // FITUR AUTO-JOIN: Cek URL apakah ada embel-embel ?room=KODE
     const urlParams = new URLSearchParams(window.location.search);
     const roomFromUrl = urlParams.get('room');
-    
     if (roomFromUrl) {
         document.getElementById('room-input').value = roomFromUrl.toUpperCase();
     } else {
@@ -32,15 +52,16 @@ window.onload = () => {
     }
 };
 
-// FITUR SHARE KE WHATSAPP
 function shareWhatsApp() {
-    // Ambil URL web saat ini tanpa embel-embel query di belakangnya
     const appUrl = window.location.href.split('?')[0];
-    const shareLink = `${appUrl}?room=${myRoom}`;
-    const message = `Ayo main Congklak Online!\n\nKlik link ini buat langsung masuk ke ruangan:\n${shareLink}\n\nAtau masukin kode manual: *${myRoom}*`;
+    let message = `Ayo main Congklak Online!\n\nKlik tautan ini untuk langsung masuk ke ruangan:\n${appUrl}?room=${myRoom}\n\nAtau masukkan kode manual: *${myRoom}*`;
     
-    const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
-    window.open(waUrl, '_blank');
+    if (gameState.game_over && gameState.winner === myRole.toString()) {
+        const myScore = gameState.board[myRole === 1 ? 7 : 15];
+        message = `Saya baru saja memenangkan pertandingan Congklak dengan skor ${myScore}! 🎉\n\nBerani menantang saya? Klik tautan ini:\n${appUrl}?room=${myRoom}`;
+    }
+    
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`, '_blank');
 }
 
 async function joinRoom() {
@@ -52,8 +73,6 @@ async function joinRoom() {
     document.querySelector("#lobby button").innerText = "Memuat...";
     myRoom = roomInput;
     myName = nameInput; 
-
-    // Update URL bar agar rapi dan bisa di-copy
     window.history.replaceState({}, '', `?room=${myRoom}`);
 
     let { data: room, error: fetchError } = await db.from('rooms').select('*').eq('id', myRoom).single();
@@ -115,6 +134,17 @@ async function joinRoom() {
     .on('broadcast', { event: 'chat' }, (payload) => {
         appendChatMessage(payload.payload.senderName || `Lawan`, payload.payload.text, false);
     })
+    .on('broadcast', { event: 'sowing' }, (payload) => {
+        gameState.board = payload.payload.board;
+        window.activeHole = payload.payload.index;
+        playDropSound();
+        triggerVibrate();
+        renderBoard();
+    })
+    .on('broadcast', { event: 'sowing_end' }, () => {
+        window.activeHole = null;
+        renderBoard();
+    })
     .subscribe();
 }
 
@@ -135,12 +165,15 @@ function appendChatMessage(displayName, text, isMe) {
 
     msgDiv.className = `max-w-[80%] px-4 py-2 text-sm ${alignClass}`;
     msgDiv.innerHTML = `<div class="text-[10px] font-bold ${nameColor} mb-0.5 uppercase tracking-wide">${displayName}</div><div>${text}</div>`;
-    
     container.appendChild(msgDiv);
     container.scrollTop = container.scrollHeight;
 }
 
 async function clickReady() {
+    const bgm = document.getElementById('bgm');
+    bgm.volume = 0.2;
+    bgm.play().catch(e => console.log("BGM terblokir oleh browser", e));
+
     document.getElementById('pregame-ready-btn').classList.add('hidden');
     let RumahKita = `p${myRole}_ready`;
     await db.from('rooms').update({ [RumahKita]: true }).eq('id', myRoom);
@@ -209,7 +242,6 @@ function renderBoard() {
         document.getElementById('pregame-suit-countdown').classList.add('hidden');
         document.getElementById('pregame-suit-choices').classList.add('hidden');
         document.getElementById('pregame-ready-section').classList.add('hidden');
-        
         const resultDiv = document.getElementById('pregame-suit-result');
         resultDiv.classList.remove('hidden');
 
@@ -218,7 +250,7 @@ function renderBoard() {
         let textStyle = "text-amber-600";
         
         if (gameState.suit_winner) {
-            if (gameState.suit_winner === 'SERI') { winText = "HASIL SERI! Mengulang suit..."; textStyle = "text-blue-600"; }
+            if (gameState.suit_winner === 'SERI') { winText = "HASIL SERI! Mengulang..."; textStyle = "text-blue-600"; }
             else if (gameState.suit_winner === myRole.toString()) { winText = "ANDA MENANG! Jalan pertama."; textStyle = "text-emerald-600"; }
             else { winText = "LAWAN MENANG. Harap tunggu."; textStyle = "text-rose-600"; }
         }
@@ -245,7 +277,6 @@ function renderBoard() {
                 }
             }, 3500);
         }
-        
         statusText.innerText = "Fase Penentuan";
         statusText.className = "text-xl font-bold text-amber-900 bg-amber-100 px-6 py-2 rounded-full shadow-sm";
         return; 
@@ -258,8 +289,13 @@ function renderBoard() {
 
         if (gameState.game_over) {
             if (gameState.winner === "SERI") statusText.innerText = "PERMAINAN SELESAI: HASIL SERI!";
-            else if (parseInt(gameState.winner) === myRole) statusText.innerText = "ANDA MENANG! 🎉";
-            else {
+            else if (parseInt(gameState.winner) === myRole) {
+                 statusText.innerText = "ANDA MENANG! 🎉";
+                 if (!window.confettiFired) {
+                     window.confettiFired = true;
+                     confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
+                 }
+            } else {
                  const winnerName = (gameState.winner === "1") ? gameState.p1_name : gameState.p2_name;
                  statusText.innerText = `${winnerName} Memenangkan Permainan.`;
             }
@@ -275,8 +311,7 @@ function renderBoard() {
             statusText.innerText = `Menunggu ${currentPlayerName}...`;
             statusText.className = "text-xl font-bold text-amber-900 bg-amber-100 px-6 py-2 rounded-full shadow-sm";
         }
-    } 
-    else {
+    } else {
         mainBoardContainer.classList.add('hidden');
         pregamePanel.classList.remove('hidden'); 
         
@@ -298,6 +333,19 @@ function renderBoard() {
         statusText.innerText = "Persiapan Permainan";
         statusText.className = "text-xl font-bold text-amber-900 bg-amber-100 px-6 py-2 rounded-full shadow-sm";
     }
+}
+
+function renderSeeds(count) {
+    const maxVisual = 15; 
+    const displayCount = Math.min(count, maxVisual);
+    let seedsHTML = '';
+    for (let i = 0; i < displayCount; i++) {
+        seedsHTML += `<div class="w-2 h-2 rounded-full bg-amber-800 shadow-sm"></div>`;
+    }
+    if (count > maxVisual) {
+        seedsHTML += `<div class="text-[10px] font-bold text-amber-900 leading-none">+</div>`;
+    }
+    return seedsHTML;
 }
 
 function renderGameHoles() {
@@ -327,8 +375,12 @@ function renderGameHoles() {
 
     document.getElementById('store-left-name').innerText = `RUMAH: ${leftName}`;
     document.getElementById('store-right-name').innerText = `RUMAH: ${rightName}`;
-    document.getElementById('store-left').innerText = gameState.board[leftStoreIndex];
-    document.getElementById('store-right').innerText = gameState.board[rightStoreIndex];
+    
+    document.getElementById('store-left-text').innerText = gameState.board[leftStoreIndex];
+    document.getElementById('store-left-seeds').innerHTML = renderSeeds(gameState.board[leftStoreIndex]);
+    
+    document.getElementById('store-right-text').innerText = gameState.board[rightStoreIndex];
+    document.getElementById('store-right-seeds').innerHTML = renderSeeds(gameState.board[rightStoreIndex]);
 
     bottomIndices.forEach(idx => { bottomContainer.innerHTML += createHoleHTML(idx, gameState.board[idx]); });
     topIndices.forEach(idx => { topContainer.innerHTML += createHoleHTML(idx, gameState.board[idx]); });
@@ -339,9 +391,14 @@ function createHoleHTML(index, count) {
     const isMyZone = (myRole === 1 && index >= 0 && index <= 6) || (myRole === 2 && index >= 8 && index <= 14);
     const canClick = isMyTurn && isMyZone && count > 0 && !gameState.game_over && !isAnimating && window.gameStarted;
     
+    const activeClass = (index === window.activeHole) ? 'active-hole' : 'border-[3px] border-amber-900/10 hover:bg-amber-200';
+    
     return `
-        <button onclick="clickHole(${index})" ${!canClick ? 'disabled' : ''} class="w-12 h-12 md:w-16 md:h-16 bg-amber-100 disabled:opacity-90 disabled:cursor-not-allowed rounded-full flex items-center justify-center font-black text-amber-950 shadow-[inset_0_3px_6px_rgba(0,0,0,0.4)] hover:bg-amber-200 active:scale-90 transition-all text-lg md:text-2xl border-[3px] border-amber-900/10 shrink-0">
-            ${count}
+        <button onclick="clickHole(${index})" ${!canClick ? 'disabled' : ''} class="relative overflow-hidden w-12 h-12 md:w-16 md:h-16 bg-amber-100 disabled:opacity-90 disabled:cursor-not-allowed rounded-full flex flex-col items-center justify-end pb-1 shadow-[inset_0_3px_6px_rgba(0,0,0,0.4)] active:scale-90 transition-all shrink-0 ${activeClass}">
+            <div class="absolute top-1 md:top-2 left-0 w-full px-2 flex flex-wrap justify-center gap-[2px] pointer-events-none">
+                ${renderSeeds(count)}
+            </div>
+            <span class="z-10 bg-white/50 px-1.5 py-[1px] rounded text-xs font-black text-amber-950 shadow-sm">${count}</span>
         </button>
     `;
 }
@@ -358,8 +415,7 @@ const delay = ms => new Promise(res => setTimeout(res, ms));
 async function clickHole(holeIndex) {
     if (!window.gameStarted) return; 
     isAnimating = true; 
-    renderBoard();
-
+    
     let board = [...gameState.board];
     let p = gameState.current_player;
     let seeds = board[holeIndex];
@@ -367,6 +423,8 @@ async function clickHole(holeIndex) {
     let currentIndex = holeIndex;
     let isSowing = true;
     let nextPlayer = p;
+
+    if(audioCtx.state === 'suspended') audioCtx.resume();
 
     while (isSowing) {
         gameState.board = [...board];
@@ -380,10 +438,15 @@ async function clickHole(holeIndex) {
 
             board[currentIndex]++;
             seeds--;
-
+            
+            window.activeHole = currentIndex;
             gameState.board = [...board];
             renderBoard();
-            await delay(400); 
+            playDropSound();
+            triggerVibrate();
+            myChannel.send({ type: 'broadcast', event: 'sowing', payload: { board: board, index: currentIndex } });
+
+            await delay(450); 
         }
 
         if ((p === 1 && currentIndex === 7) || (p === 2 && currentIndex === 15)) {
@@ -405,8 +468,10 @@ async function clickHole(holeIndex) {
                     board[oppositeIndex] = 0;
                     board[currentIndex] = 0;
                     
+                    window.activeHole = null;
                     gameState.board = [...board];
                     renderBoard();
+                    myChannel.send({ type: 'broadcast', event: 'sowing_end' });
                     await delay(500); 
                 }
             }
@@ -428,6 +493,8 @@ async function clickHole(holeIndex) {
     }
 
     isAnimating = false; 
+    window.activeHole = null;
+    myChannel.send({ type: 'broadcast', event: 'sowing_end' });
 
     await db.from('rooms').update({
         board: board,
