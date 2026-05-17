@@ -5,7 +5,8 @@ const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let myRoom = "";
 let myRole = null;
-let isAnimating = false; // Kunci biar gak bisa diklik pas biji lagi jalan
+let myChannel = null; // Buat nampung koneksi Realtime
+let isAnimating = false; 
 let myClientId = localStorage.getItem('congklak_client_id') || (() => {
     let id = Math.random().toString(36).substring(2, 11);
     localStorage.setItem('congklak_client_id', id);
@@ -58,26 +59,67 @@ async function joinRoom() {
         }
     }
 
-    document.getElementById('role-indicator').innerText = `Kamu adalah: Player ${myRole} (Room: ${myRoom})`;
+    // Tampilkan Area Game & Chat
+    document.getElementById('role-indicator').innerText = `KAMU ADALAH: PLAYER ${myRole}`;
+    document.getElementById('chat-room-id').innerText = `ROOM: ${myRoom}`;
     document.getElementById('lobby').classList.add('hidden');
-    document.getElementById('game-info').classList.remove('hidden');
-    document.getElementById('game-board').classList.remove('hidden');
+    document.getElementById('game-area').classList.remove('hidden');
 
     gameState = room;
     renderBoard();
 
-    // Listen realtime perubahan dari musuh
-    db.channel('any')
+    // Inisialisasi Koneksi Realtime (Gerakan + Chat)
+    myChannel = db.channel('room_' + myRoom);
+    
+    myChannel
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${myRoom}` }, (payload) => {
-        // Hanya update dari database kalau kita lagi gak jalanin animasi
         if (!isAnimating) {
             gameState = payload.new;
             renderBoard();
         }
     })
+    .on('broadcast', { event: 'chat' }, (payload) => {
+        // Nerima chat dari musuh
+        appendChatMessage(payload.payload.sender, payload.payload.text, false);
+    })
     .subscribe();
 }
 
+// === SISTEM LIVE CHAT ===
+function sendChat() {
+    const input = document.getElementById('chat-input');
+    const text = input.value.trim();
+    if (!text) return;
+
+    // Munculin di layar sendiri
+    appendChatMessage(myRole, text, true);
+    
+    // Siarkan ke musuh via Supabase Broadcast
+    myChannel.send({
+        type: 'broadcast',
+        event: 'chat',
+        payload: { sender: myRole, text: text }
+    });
+    
+    input.value = '';
+}
+
+function appendChatMessage(senderRole, text, isMe) {
+    const container = document.getElementById('chat-messages');
+    const msgDiv = document.createElement('div');
+    
+    const alignClass = isMe ? 'self-end bg-amber-500 text-white rounded-tl-xl rounded-tr-xl rounded-bl-xl' : 'self-start bg-white border border-amber-200 text-amber-900 rounded-tl-xl rounded-tr-xl rounded-br-xl shadow-sm';
+    const nameColor = isMe ? 'text-amber-100' : 'text-amber-500';
+    const nameText = isMe ? 'Kamu' : `Player ${senderRole}`;
+
+    msgDiv.className = `max-w-[80%] px-4 py-2 text-sm ${alignClass}`;
+    msgDiv.innerHTML = `<div class="text-[10px] font-bold ${nameColor} mb-0.5 uppercase tracking-wide">${nameText}</div><div>${text}</div>`;
+    
+    container.appendChild(msgDiv);
+    container.scrollTop = container.scrollHeight; // Auto scroll ke bawah
+}
+
+// === SISTEM PAPAN CONGKLAK ===
 function renderBoard() {
     const p1Container = document.getElementById('p1-holes');
     const p2Container = document.getElementById('p2-holes');
@@ -94,32 +136,32 @@ function renderBoard() {
     
     if (gameState.game_over) {
         if (gameState.winner === "SERI") statusText.innerText = "GAME OVER: Hasil SERI!";
-        else if (parseInt(gameState.winner) === myRole) statusText.innerText = "GAME OVER: KAMU MENANG! 🏆";
-        else statusText.innerText = `GAME OVER: Player ${gameState.winner} Menang!`;
-        statusText.className = "text-xl font-bold text-rose-900 bg-rose-100 px-6 py-1.5 rounded-full shadow-sm";
+        else if (parseInt(gameState.winner) === myRole) statusText.innerText = "KAMU MENANG! 🎉";
+        else statusText.innerText = `Player ${gameState.winner} Menang!`;
+        statusText.className = "text-xl font-bold text-rose-900 bg-rose-100 px-6 py-2 rounded-full shadow-sm";
         return;
     }
 
     if (isAnimating) {
         statusText.innerText = "Biji lagi jalan...";
-        statusText.className = "text-xl font-bold text-blue-900 bg-blue-100 px-6 py-1.5 rounded-full shadow-sm";
+        statusText.className = "text-xl font-bold text-blue-900 bg-blue-100 px-6 py-2 rounded-full shadow-sm animate-pulse";
     } else if (gameState.current_player === myRole) {
         statusText.innerText = "Giliran KAMU! Gilas!";
-        statusText.className = "text-xl font-bold text-emerald-900 bg-emerald-100 px-6 py-1.5 rounded-full shadow-sm";
+        statusText.className = "text-xl font-bold text-emerald-900 bg-emerald-100 px-6 py-2 rounded-full shadow-sm";
     } else {
-        statusText.innerText = `Giliran Player ${gameState.current_player}...`;
-        statusText.className = "text-xl font-bold text-amber-900 bg-amber-100 px-6 py-1.5 rounded-full shadow-sm";
+        statusText.innerText = `Menunggu Player ${gameState.current_player}...`;
+        statusText.className = "text-xl font-bold text-amber-900 bg-amber-100 px-6 py-2 rounded-full shadow-sm";
     }
 }
 
 function createHoleHTML(index, count) {
     const isMyTurn = gameState.current_player === myRole;
     const isMyZone = (myRole === 1 && index >= 0 && index <= 6) || (myRole === 2 && index >= 8 && index <= 14);
-    // Kunci tombol kalau lagi animasi atau bukan giliran
     const canClick = isMyTurn && isMyZone && count > 0 && !gameState.game_over && !isAnimating;
     
+    // Perbaikan CSS Biar Tombolnya Bulet Sempurna & Rapi (w-12 h-12)
     return `
-        <button onclick="clickHole(${index})" ${!canClick ? 'disabled' : ''} class="w-full aspect-square bg-amber-100 disabled:opacity-80 disabled:cursor-not-allowed rounded-full flex items-center justify-center font-black text-amber-950 shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)] hover:bg-amber-200 active:scale-95 transition-all text-base md:text-xl border-2 border-amber-900/20">
+        <button onclick="clickHole(${index})" ${!canClick ? 'disabled' : ''} class="w-12 h-12 md:w-16 md:h-16 bg-amber-100 disabled:opacity-90 disabled:cursor-not-allowed rounded-full flex items-center justify-center font-black text-amber-950 shadow-[inset_0_3px_6px_rgba(0,0,0,0.4)] hover:bg-amber-200 active:scale-90 transition-all text-lg md:text-2xl border-[3px] border-amber-900/10 shrink-0">
             ${count}
         </button>
     `;
@@ -132,11 +174,10 @@ function checkGameOver(board) {
     return p1Empty || p2Empty;
 }
 
-// Fungsi jeda untuk animasi
 const delay = ms => new Promise(res => setTimeout(res, ms));
 
 async function clickHole(holeIndex) {
-    isAnimating = true; // Kunci papan
+    isAnimating = true; 
     renderBoard();
 
     let board = [...gameState.board];
@@ -145,40 +186,31 @@ async function clickHole(holeIndex) {
     let isSowing = true;
     let nextPlayer = p;
 
-    // LOOP BESAR: Terus jalan selama jatuh di lubang yang ada isinya
     while (isSowing) {
         let seeds = board[currentIndex];
         board[currentIndex] = 0;
 
-        // Render animasi saat ngambil biji
         gameState.board = [...board];
         renderBoard();
         await delay(300);
 
-        // LOOP KECIL: Membagikan biji satu per satu
         while (seeds > 0) {
             currentIndex = (currentIndex + 1) % 16;
-            
-            // Lewati rumah musuh
             if (p === 1 && currentIndex === 15) continue;
             if (p === 2 && currentIndex === 7) continue;
 
             board[currentIndex]++;
             seeds--;
 
-            // Render animasi tiap kali naruh biji
             gameState.board = [...board];
             renderBoard();
-            await delay(400); // Kecepatan jalan biji (400ms)
+            await delay(400); 
         }
 
-        // EVALUASI: Biji terakhir jatuh di mana?
         if ((p === 1 && currentIndex === 7) || (p === 2 && currentIndex === 15)) {
-            // 1. Jatuh di rumah sendiri -> Dapat giliran lagi, animasi berhenti
             isSowing = false;
             nextPlayer = p;
         } else if (board[currentIndex] === 1) {
-            // 2. Jatuh di lubang kosong (sekarang isinya 1 karena barusan ditaruh) -> Mati/Nembak
             isSowing = false;
             nextPlayer = p === 1 ? 2 : 1;
 
@@ -188,7 +220,7 @@ async function clickHole(holeIndex) {
             if ((p === 1 && isP1Zone) || (p === 2 && isP2Zone)) {
                 const oppositeIndex = 14 - currentIndex;
                 if (board[oppositeIndex] > 0) {
-                    await delay(600); // Jeda dramatis sebelum nembak
+                    await delay(600); 
                     let RumahKita = (p === 1) ? 7 : 15;
                     board[RumahKita] += board[oppositeIndex] + 1;
                     board[oppositeIndex] = 0;
@@ -200,8 +232,7 @@ async function clickHole(holeIndex) {
                 }
             }
         } else {
-            // 3. Jatuh di lubang yang ADA isinya -> Ambil lagi semua isinya, LANJUT JALAN!
-            await delay(500); // Jeda sebentar sebelum ngambil biji lagi
+            await delay(500); 
         }
     }
 
@@ -215,9 +246,8 @@ async function clickHole(holeIndex) {
         winner = board[7] > board[15] ? "1" : (board[15] > board[7] ? "2" : "SERI");
     }
 
-    isAnimating = false; // Buka kunci papan
+    isAnimating = false; 
 
-    // Tembak hasil akhirnya ke Supabase biar layar musuh ikut ke-update
     await db.from('rooms').update({
         board: board,
         current_player: nextPlayer,
