@@ -1,7 +1,6 @@
 const SUPABASE_URL = "https://dcfgjrfxnoeumusesbeo.supabase.co";
 const SUPABASE_ANON_KEY = "Sb_publishable_WpZlTTKYU9ITQkkpKSrqSQ_8_vRcidn";
 
-// FIX ERROR: Ganti nama variabel biar gak tabrakan sama library bawaan
 const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let myRoom = "";
@@ -14,7 +13,6 @@ let myClientId = localStorage.getItem('congklak_client_id') || (() => {
 
 let gameState = { board: new Array(16).fill(0), current_player: 1, game_over: false, winner: null };
 
-// FITUR BARU: Auto-generate 4 huruf kode acak pas web dibuka
 window.onload = () => {
     document.getElementById('room-input').value = Math.random().toString(36).substring(2, 6).toUpperCase();
 };
@@ -23,28 +21,47 @@ async function joinRoom() {
     const roomInput = document.getElementById('room-input').value.trim().toUpperCase();
     if (!roomInput) return alert("Isi kode room dulu bor!");
     
-    // Ubah teks tombol biar ada loading visual
     document.querySelector("button").innerText = "Loading...";
-    
     myRoom = roomInput;
 
-    let { data: room, error } = await db.from('rooms').select('*').eq('id', myRoom).single();
+    // Tarik data room, tangkap error jika ada
+    let { data: room, error: fetchError } = await db.from('rooms').select('*').eq('id', myRoom).single();
 
-    const initialBoard = new Array(16).fill(0);
-    for (let i = 0; i < 7; i++) { initialBoard[i] = 7; initialBoard[i + 8] = 7; }
+    // Abaikan error PGRST116 (artinya room belum ada/wajar)
+    if (fetchError && fetchError.code !== 'PGRST116') {
+        alert("Error Database: " + fetchError.message);
+        document.querySelector("button").innerText = "Gabung Game";
+        return;
+    }
+
+    const initialBoard = [7,7,7,7,7,7,7, 0, 7,7,7,7,7,7,7, 0];
 
     if (!room) {
         myRole = 1;
-        await db.from('rooms').insert([{
+        // Langsung insert dan select datanya sekaligus
+        let { data: newRoom, error: insertError } = await db.from('rooms').insert([{
             id: myRoom, board: initialBoard, current_player: 1, p1_id: myClientId
-        }]);
+        }]).select().single();
+
+        if (insertError) {
+            alert("Gagal bikin room: " + insertError.message);
+            document.querySelector("button").innerText = "Gabung Game";
+            return;
+        }
+        room = newRoom;
     } else {
         if (room.p1_id === myClientId) {
             myRole = 1;
         } else if (room.p2_id === myClientId || !room.p2_id) {
             myRole = 2;
             if (!room.p2_id) {
-                await db.from('rooms').update({ p2_id: myClientId }).eq('id', myRoom);
+                let { data: updatedRoom, error: updateError } = await db.from('rooms').update({ p2_id: myClientId }).eq('id', myRoom).select().single();
+                if (updateError) {
+                    alert("Gagal join room: " + updateError.message);
+                    document.querySelector("button").innerText = "Gabung Game";
+                    return;
+                }
+                room = updatedRoom;
             }
         } else {
             document.querySelector("button").innerText = "Gabung Game";
@@ -57,10 +74,11 @@ async function joinRoom() {
     document.getElementById('game-info').classList.remove('hidden');
     document.getElementById('game-board').classList.remove('hidden');
 
-    let { data: currentRoom } = await db.from('rooms').select('*').eq('id', myRoom).single();
-    if (currentRoom) { gameState = currentRoom; renderBoard(); }
+    // Karena room sekarang dipastikan tidak null, render pasti berjalan
+    gameState = room;
+    renderBoard();
 
-    // Listen data realtime
+    // Listen realtime
     db.channel('any')
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${myRoom}` }, (payload) => {
         gameState = payload.new;
