@@ -15,9 +15,16 @@
     </div>
     
     <div id="lobby" class="bg-white p-6 rounded-2xl shadow-xl w-full max-w-sm border border-amber-100 mb-6">
-        <h2 class="text-lg font-bold text-amber-900 mb-4 text-center">Masuk ke Ruangan</h2>
-        <input id="room-input" type="text" class="w-full px-4 py-3 border-2 border-amber-200 rounded-xl focus:outline-none focus:border-amber-500 mb-4 text-center uppercase font-black tracking-widest text-2xl text-amber-900 bg-amber-50">
-        <button onclick="joinRoom()" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-lg active:scale-95">Gabung Game</button>
+        <h2 class="text-lg font-bold text-amber-900 mb-4 text-center">Gabung Game Bor!</h2>
+        <div class="flex flex-col gap-1 mb-3">
+             <label class="text-xs font-bold text-amber-600 uppercase ml-1">Nama Kamu:</label>
+             <input id="name-input" type="text" placeholder="Gusconk" class="w-full px-4 py-2.5 border-2 border-amber-200 rounded-xl focus:outline-none focus:border-amber-500 font-medium text-amber-900">
+        </div>
+        <div class="flex flex-col gap-1 mb-4">
+             <label class="text-xs font-bold text-amber-600 uppercase ml-1">Kode Room:</label>
+             <input id="room-input" type="text" class="w-full px-4 py-2 border-2 border-amber-200 rounded-xl focus:outline-none focus:border-amber-500 text-center uppercase font-black tracking-widest text-xl text-amber-900 bg-amber-50">
+        </div>
+        <button onclick="joinRoom()" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-lg active:scale-95">Main Online!</button>
     </div>
 
     <div id="game-area" class="hidden w-full max-w-4xl flex flex-col gap-6">
@@ -27,18 +34,51 @@
             <span id="role-indicator" class="text-xs font-bold text-amber-600 uppercase tracking-widest mt-2 bg-amber-100/50 px-3 py-1 rounded-full"></span>
         </div>
 
-        <div class="w-full overflow-x-auto pb-4 custom-scrollbar">
-            <main class="min-w-[700px] bg-amber-800 p-6 rounded-[3rem] shadow-2xl flex items-center justify-between gap-6 border-4 border-amber-950 mx-auto">
-                
-                <div id="hole-15" class="w-20 h-40 bg-amber-950 rounded-full flex items-center justify-center text-white font-black text-3xl shadow-[inset_0_8px_16px_rgba(0,0,0,0.6)]">0</div>
-                
-                <div class="flex-1 flex flex-col gap-4">
-                    <div class="flex justify-between gap-2" id="p2-holes"></div>
-                    <div class="flex justify-between gap-2" id="p1-holes"></div>
-                </div>
-                
-                <div id="hole-7" class="w-20 h-40 bg-amber-950 rounded-full flex items-center justify-center text-white font-black text-3xl shadow-[inset_0_8px_16px_rgba(0,0,0,0.6)]">0</div>
-            </main>
+        <div id="pregame-panel" class="bg-white p-6 rounded-3xl shadow-xl w-full max-w-md mx-auto border border-amber-100 text-center flex flex-col gap-6">
+             <div id="pregame-ready-section" class="flex flex-col items-center gap-3">
+                  <span id="pregame-ready-status" class="text-base font-bold text-amber-900">Pencet tombol kalau siap:</span>
+                  <button id="pregame-ready-btn" onclick="clickReady()" class="w-full max-w-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-full transition-all shadow-md active:scale-95 text-lg">Saya Ready Bor!</button>
+             </div>
+             
+             <div id="pregame-suit-countdown" class="hidden text-amber-900">
+                  <div class="text-xs uppercase font-bold text-amber-600 tracking-wider">Bersiap Suit Dalam...</div>
+                  <div id="pregame-suit-seconds" class="text-7xl font-black">5</div>
+             </div>
+             <div id="pregame-suit-choices" class="hidden flex flex-col items-center gap-4">
+                  <span class="text-base font-bold text-amber-900">Cepat Pilih Senjata Lu:</span>
+                  <div class="flex gap-4">
+                       <button onclick="clickSuit('batu')" class="text-4xl bg-amber-100 p-4 rounded-full shadow-inner hover:bg-amber-200 transition-all active:scale-90 border-2 border-amber-900/10">✊</button>
+                       <button onclick="clickSuit('kertas')" class="text-4xl bg-amber-100 p-4 rounded-full shadow-inner hover:bg-amber-200 transition-all active:scale-90 border-2 border-amber-900/10">✋</button>
+                       <button onclick="clickSuit('gunting')" class="text-4xl bg-amber-100 p-4 rounded-full shadow-inner hover:bg-amber-200 transition-all active:scale-90 border-2 border-amber-900/10">✌️</button>
+                  </div>
+             </div>
+        </div>
+
+        <div id="main-board-container" class="hidden flex flex-col gap-4">
+             <div class="w-full overflow-x-auto pb-4 custom-scrollbar">
+                <main class="min-w-[700px] bg-amber-800 p-6 rounded-[3rem] shadow-2xl flex items-center justify-between gap-6 border-4 border-amber-950 mx-auto relative">
+                    
+                    <div class="flex flex-col items-center gap-2 relative">
+                         <div id="hole-15-name" class="absolute -top-7 text-xs font-bold text-amber-300 uppercase tracking-wider text-center w-full truncate">Player 2</div>
+                         <div id="hole-15" class="w-20 h-40 bg-amber-950 rounded-full flex items-center justify-center text-white font-black text-3xl shadow-[inset_0_8px_16px_rgba(0,0,0,0.6)]">0</div>
+                    </div>
+                    
+                    <div class="flex-1 flex flex-col gap-4">
+                        <div class="flex justify-between gap-2" id="p2-holes"></div>
+                        
+                        <div class="flex justify-between items-center text-amber-500/80 -my-2 relative px-4">
+                             <span class="text-3xl font-black relative -left-1">⭯</span> <span class="w-full border-t-4 border-dashed border-amber-500/50"></span>
+                             <span class="text-3xl font-black relative -right-1">⭯</span> </div>
+
+                        <div class="flex justify-between gap-2" id="p1-holes"></div>
+                    </div>
+                    
+                    <div class="flex flex-col items-center gap-2 relative">
+                         <div id="hole-7-name" class="absolute -top-7 text-xs font-bold text-amber-300 uppercase tracking-wider text-center w-full truncate">Player 1</div>
+                         <div id="hole-7" class="w-20 h-40 bg-amber-950 rounded-full flex items-center justify-center text-white font-black text-3xl shadow-[inset_0_8px_16px_rgba(0,0,0,0.6)]">0</div>
+                    </div>
+                </main>
+            </div>
         </div>
 
         <div class="bg-white rounded-2xl shadow-xl border border-amber-200 flex flex-col h-72 overflow-hidden">
@@ -55,7 +95,7 @@
             </div>
             
             <div class="p-3 bg-white border-t border-amber-100 flex gap-2">
-                <input type="text" id="chat-input" placeholder="Ngeledek musuh di sini..." class="flex-1 px-4 py-2 bg-amber-50 border border-amber-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm" onkeypress="if(event.key === 'Enter') sendChat()">
+                <input type="text" id="chat-input" placeholder="Gilas musuh dngan kata-kata bor..." class="flex-1 px-4 py-2 bg-amber-50 border border-amber-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm" onkeypress="if(event.key === 'Enter') sendChat()">
                 <button onclick="sendChat()" class="bg-amber-800 hover:bg-amber-900 text-white px-5 py-2 rounded-xl font-bold text-sm transition-all shadow-md active:scale-95">Kirim</button>
             </div>
         </div>
@@ -64,7 +104,6 @@
 
     <script src="app.js"></script>
     <style>
-        /* Desain scrollbar tipis buat papan congklaknya */
         .custom-scrollbar::-webkit-scrollbar { height: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: #fef3c7; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #d97706; border-radius: 10px; }
