@@ -7,14 +7,22 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
 </head>
 <body class="bg-amber-50 min-h-screen flex flex-col items-center p-4 selection:bg-amber-200 font-sans">
     
     <audio id="bgm" loop src="https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3" volume="0.3"></audio>
 
-    <div class="mt-4 mb-6 text-center">
-        <h1 class="text-4xl font-extrabold text-amber-900 mb-1 tracking-tight">Congklak</h1>
-        <p class="text-sm text-amber-700 font-medium">Real-time Multiplayer Game</p>
+    <div class="mt-4 mb-4 text-center relative w-full max-w-4xl flex justify-between items-center px-4">
+        <div></div> <div class="text-center">
+            <h1 class="text-4xl font-extrabold text-amber-900 mb-1 tracking-tight">Congklak</h1>
+            <p class="text-sm text-amber-700 font-medium">Real-time Multiplayer Game</p>
+        </div>
+        <select id="bgm-select" onchange="changeBGM()" class="text-xs bg-amber-200 text-amber-900 border border-amber-300 rounded-lg px-2 py-1 outline-none font-bold shadow-sm cursor-pointer">
+            <option value="https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3">Musik: Lofi Chill</option>
+            <option value="https://cdn.pixabay.com/download/audio/2022/04/27/audio_651239c0f9.mp3">Musik: Jazz Cafe</option>
+            <option value="https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8b8173abc.mp3">Musik: Upbeat</option>
+        </select>
     </div>
     
     <div id="lobby" class="bg-white p-6 rounded-2xl shadow-xl w-full max-w-sm border border-amber-100 mb-6">
@@ -30,16 +38,19 @@
         <button onclick="joinRoom()" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-lg active:scale-95">Masuk Ruangan</button>
     </div>
 
-    <div id="game-area" class="hidden w-full max-w-4xl flex flex-col gap-6">
+    <div id="game-area" class="hidden w-full max-w-4xl flex flex-col gap-6 relative">
         
         <div class="flex flex-col items-center gap-1 text-center">
             <div id="status-panel" class="text-xl font-bold text-amber-900 bg-amber-100 px-6 py-2 rounded-full shadow-sm">Menghubungkan...</div>
-            <div class="flex gap-2 mt-2 items-center">
+            <div class="flex gap-2 mt-2 items-center flex-wrap justify-center">
                 <span id="role-indicator" class="text-xs font-bold text-amber-600 uppercase tracking-widest bg-amber-100/50 px-3 py-1.5 rounded-full"></span>
-                <button onclick="shareWhatsApp()" class="text-xs font-bold text-white uppercase tracking-widest bg-green-500 hover:bg-green-600 px-4 py-1.5 rounded-full flex items-center gap-1.5 transition-all shadow-sm active:scale-95">
-                    <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.012c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/></svg>
-                    Bagikan
-                </button>
+                <span id="game-timer" class="text-xs font-bold text-blue-700 bg-blue-100 px-3 py-1.5 rounded-full hidden">⏱️ 00:00</span>
+                <button onclick="shareWhatsApp()" class="text-xs font-bold text-white uppercase tracking-widest bg-green-500 hover:bg-green-600 px-4 py-1.5 rounded-full transition-all shadow-sm active:scale-95">Bagikan WA</button>
+            </div>
+            <div id="action-buttons" class="mt-3 flex gap-2 hidden">
+                <button id="btn-surrender" onclick="surrenderGame()" class="text-xs font-bold text-white bg-rose-500 hover:bg-rose-600 px-4 py-2 rounded-lg shadow-sm transition-all active:scale-95">🏳️ Menyerah</button>
+                <button id="btn-reset" onclick="resetGame()" class="text-xs font-bold text-white bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded-lg shadow-sm transition-all active:scale-95 hidden">🔄 Main Lagi</button>
+                <button id="btn-ss" onclick="takeScreenshotAndShare()" class="text-xs font-bold text-amber-900 bg-amber-300 hover:bg-amber-400 px-4 py-2 rounded-lg shadow-sm transition-all active:scale-95 hidden">📸 Pamer Status WA</button>
             </div>
         </div>
 
@@ -48,7 +59,6 @@
                   <span id="pregame-ready-status" class="text-base font-bold text-amber-900">Tekan tombol jika Anda sudah siap:</span>
                   <button id="pregame-ready-btn" onclick="clickReady()" class="w-full max-w-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-full transition-all shadow-md active:scale-95 text-lg">Siap Bermain</button>
              </div>
-             
              <div id="pregame-suit-countdown" class="hidden text-amber-900">
                   <div class="text-xs uppercase font-bold text-amber-600 tracking-wider">Bersiap Memilih Dalam...</div>
                   <div id="pregame-suit-seconds" class="text-7xl font-black">5</div>
@@ -64,10 +74,21 @@
              <div id="pregame-suit-result" class="hidden flex flex-col items-center gap-2"></div>
         </div>
 
-        <div id="main-board-container" class="hidden flex flex-col gap-4">
-             <div class="w-full overflow-x-auto pb-4 custom-scrollbar">
-                <main class="min-w-[700px] bg-amber-800 p-6 rounded-[3rem] shadow-2xl flex items-center justify-between gap-6 border-4 border-amber-950 mx-auto relative">
-                    
+        <div id="main-board-container" class="hidden flex flex-col gap-4 relative">
+             
+             <div class="absolute top-1/2 -left-2 md:-left-12 -translate-y-1/2 flex flex-col gap-2 z-10">
+                 <button onclick="sendTaunt('🤣')" class="text-2xl hover:scale-125 transition-transform drop-shadow-md">🤣</button>
+                 <button onclick="sendTaunt('🥱')" class="text-2xl hover:scale-125 transition-transform drop-shadow-md">🥱</button>
+             </div>
+             <div class="absolute top-1/2 -right-2 md:-right-12 -translate-y-1/2 flex flex-col gap-2 z-10">
+                 <button onclick="sendTaunt('🤬')" class="text-2xl hover:scale-125 transition-transform drop-shadow-md">🤬</button>
+                 <button onclick="sendTaunt('🤯')" class="text-2xl hover:scale-125 transition-transform drop-shadow-md">🤯</button>
+             </div>
+
+             <div id="capture-area" class="w-full overflow-x-auto pb-4 custom-scrollbar bg-amber-50 rounded-[3rem]">
+                <main class="min-w-[700px] bg-amber-800 p-6 rounded-[3rem] shadow-2xl flex items-center justify-between gap-6 border-4 border-amber-950 mx-auto relative overflow-hidden">
+                    <div id="taunt-container" class="absolute w-full h-full pointer-events-none z-50"></div>
+
                     <div class="flex flex-col items-center gap-2 relative">
                          <div id="store-left-name" class="absolute -top-7 text-xs font-bold text-amber-300 uppercase tracking-wider text-center w-full truncate"></div>
                          <div id="store-left" class="w-20 h-40 bg-amber-950 rounded-[3rem] flex items-center justify-center text-white font-black text-3xl shadow-[inset_0_8px_16px_rgba(0,0,0,0.6)] relative overflow-hidden flex flex-col justify-end pb-3">
@@ -78,13 +99,11 @@
                     
                     <div class="flex-1 flex flex-col gap-4">
                         <div class="flex justify-between gap-2" id="holes-top"></div>
-                        
                         <div class="flex justify-between items-center text-amber-500/80 -my-2 relative px-4 text-2xl font-black">
                              <span>→</span>
                              <span class="w-full border-t-4 border-dashed border-amber-500/50 mx-4"></span>
                              <span>←</span>
                         </div>
-
                         <div class="flex justify-between gap-2" id="holes-bottom"></div>
                     </div>
                     
@@ -99,7 +118,7 @@
             </div>
         </div>
 
-        <div class="bg-white rounded-2xl shadow-xl border border-amber-200 flex flex-col h-72 overflow-hidden">
+        <div class="bg-white rounded-2xl shadow-xl border border-amber-200 flex flex-col h-72 overflow-hidden mt-4">
             <div class="bg-amber-100 px-4 py-3 border-b border-amber-200 font-bold text-amber-900 text-sm flex justify-between items-center">
                 <div class="flex items-center gap-2">
                     <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
@@ -112,12 +131,21 @@
                 <div class="text-center text-xs text-amber-600/60 font-medium my-2">-- Obrolan dimulai --</div>
             </div>
             
+            <div class="bg-amber-50 px-2 py-1 border-t border-amber-100 flex gap-2 justify-center text-xl overflow-x-auto">
+                <button onclick="insertEmote('😂')" class="hover:scale-110">😂</button>
+                <button onclick="insertEmote('😭')" class="hover:scale-110">😭</button>
+                <button onclick="insertEmote('😡')" class="hover:scale-110">😡</button>
+                <button onclick="insertEmote('😎')" class="hover:scale-110">😎</button>
+                <button onclick="insertEmote('👍')" class="hover:scale-110">👍</button>
+                <button onclick="insertEmote('🙏')" class="hover:scale-110">🙏</button>
+                <button onclick="insertEmote('🔥')" class="hover:scale-110">🔥</button>
+            </div>
+
             <div class="p-3 bg-white border-t border-amber-100 flex gap-2">
                 <input type="text" id="chat-input" placeholder="Ketik pesan..." class="flex-1 px-4 py-2 bg-amber-50 border border-amber-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm" onkeypress="if(event.key === 'Enter') sendChat()">
                 <button onclick="sendChat()" class="bg-amber-800 hover:bg-amber-900 text-white px-5 py-2 rounded-xl font-bold text-sm transition-all shadow-md active:scale-95">Kirim</button>
             </div>
         </div>
-
     </div>
 
     <script src="app.js"></script>
@@ -128,7 +156,7 @@
         
         .active-hole {
             animation: pulse-ring 0.8s infinite;
-            border-color: #fbbf24 !important; /* amber-400 */
+            border-color: #fbbf24 !important;
             transform: scale(1.1);
             z-index: 20;
         }
@@ -136,6 +164,21 @@
             0% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.7); }
             70% { box-shadow: 0 0 0 10px rgba(251, 191, 36, 0); }
             100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0); }
+        }
+        /* Animasi Emot Melayang */
+        .float-taunt {
+            position: absolute;
+            font-size: 3rem;
+            bottom: 20px;
+            animation: floatUp 2s ease-out forwards;
+            pointer-events: none;
+            z-index: 100;
+            filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5));
+        }
+        @keyframes floatUp {
+            0% { opacity: 0; transform: translateY(20px) scale(0.5); }
+            20% { opacity: 1; transform: translateY(-10px) scale(1.2); }
+            100% { opacity: 0; transform: translateY(-150px) scale(1); }
         }
     </style>
 </body>
