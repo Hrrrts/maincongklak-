@@ -1,0 +1,42 @@
+<div id="chat-panel-container" class="bg-white rounded-2xl shadow-lg border border-amber-200 flex flex-col h-80 overflow-hidden w-full max-w-lg mx-auto">
+    <div class="bg-amber-100/80 px-4 py-2.5 border-b border-amber-200 flex justify-between items-center">
+        <div class="flex items-center gap-2 text-xs font-bold text-amber-900">
+            <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>Ruang Obrolan
+        </div>
+        <div class="flex items-center gap-1.5">
+            <span id="chat-room-id" class="text-amber-700 bg-amber-200/50 px-2 py-1 rounded text-[10px] font-mono font-bold border border-amber-300">KODE: -</span>
+            <button onclick="shareWhatsApp()" class="bg-green-500 hover:bg-green-600 text-white p-1.5 rounded transition-all shadow-sm active:scale-95" title="Bagikan ke WA">Share WA</button>
+        </div>
+    </div>
+
+    <div class="bg-amber-50 px-3 py-2 border-b border-amber-100 flex flex-col gap-1.5 shadow-sm z-10">
+        <div class="flex justify-between items-center">
+            <span class="text-[9px] font-extrabold text-amber-600 uppercase tracking-widest">Emot Melayang:</span>
+            <div class="flex gap-4">
+                <button onclick="sendTaunt('🤣')" class="text-base hover:scale-125">🤣</button>
+                <button onclick="sendTaunt('🥱')" class="text-base hover:scale-125">🥱</button>
+                <button onclick="sendTaunt('🤬')" class="text-base hover:scale-125">🤬</button>
+                <button onclick="sendTaunt('🤯')" class="text-base hover:scale-125">🤯</button>
+            </div>
+        </div>
+        <div class="flex justify-between items-center border-t border-amber-200/50 pt-1.5">
+            <span class="text-[9px] font-extrabold text-amber-600 uppercase tracking-widest">Ketik Cepat:</span>
+            <div class="flex gap-3">
+                <button onclick="insertEmote('😂')" class="text-sm hover:scale-110">😂</button>
+                <button onclick="insertEmote('😭')" class="text-sm hover:scale-110">😭</button>
+                <button onclick="insertEmote('😡')" class="text-sm hover:scale-110">😡</button>
+                <button onclick="insertEmote('😎')" class="text-sm hover:scale-110">😎</button>
+                <button onclick="insertEmote('🔥')" class="text-sm hover:scale-110">🔥</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="chat-messages" class="flex-1 p-3 overflow-y-auto flex flex-col gap-2.5 bg-amber-50/50">
+        <div class="text-center text-[10px] text-amber-600/60 font-bold my-1 uppercase">-- Obrolan dimulai --</div>
+    </div>
+    
+    <div class="p-2 bg-white border-t border-amber-100 flex gap-1.5">
+        <input type="text" id="chat-input" placeholder="Ketik pesan..." class="flex-1 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg text-xs" onkeypress="if(event.key === 'Enter') sendChat()">
+        <button onclick="sendChat()" class="bg-amber-800 text-white px-4 py-1.5 rounded-lg text-xs">Kirim</button>
+    </div>
+</div>
