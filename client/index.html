@@ -19,17 +19,6 @@
     <div class="mt-4 mb-6 flex flex-col items-center gap-1.5 text-center w-full">
         <h1 class="text-4xl font-extrabold text-amber-900 tracking-tight leading-none">maincongklak</h1>
         <p class="text-xs text-amber-700 font-medium mb-1">Real-time Multiplayer Game</p>
-        
-        <div class="relative inline-block">
-            <select id="bgm-select" onchange="changeBGM()" class="text-[10px] bg-amber-200/50 hover:bg-amber-200 text-amber-900 border border-amber-300 rounded-full px-4 py-1.5 outline-none font-bold shadow-sm cursor-pointer appearance-none text-center transition-colors">
-                <option value="https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3">🎵 Musik: Lofi Chill</option>
-                <option value="https://cdn.pixabay.com/download/audio/2022/04/27/audio_651239c0f9.mp3">🎵 Musik: Jazz Cafe</option>
-                <option value="https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8b8173abc.mp3">🎵 Musik: Upbeat</option>
-            </select>
-            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-amber-700">
-                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-            </div>
-        </div>
     </div>
     
     <div id="lobby" class="w-full max-w-sm flex flex-col gap-4 mb-6">
@@ -76,10 +65,22 @@
         
         <div class="flex flex-col items-center gap-2 text-center">
             <div id="status-panel" class="text-lg md:text-xl font-bold text-amber-900 bg-amber-100 px-6 py-2 rounded-full shadow-sm">Menghubungkan...</div>
-            <div class="flex gap-2 items-center justify-center mt-1">
+            <div class="flex gap-2 items-center justify-center mt-1 flex-wrap">
                 <span id="role-indicator" class="text-[10px] font-bold text-amber-700 uppercase tracking-widest bg-amber-200/50 px-3 py-1.5 rounded-full border border-amber-200"></span>
                 <span id="game-timer" class="text-[10px] font-bold text-blue-700 bg-blue-100 px-3 py-1.5 rounded-full border border-blue-200 hidden">⏱️ 00:00</span>
+                
+                <div class="relative inline-block">
+                    <select id="bgm-select" onchange="changeBGM()" class="text-[10px] bg-amber-200/50 hover:bg-amber-200 text-amber-900 border border-amber-300 rounded-full px-4 py-1.5 outline-none font-bold shadow-sm cursor-pointer appearance-none text-center transition-colors">
+                        <option value="https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3">🎵 Lofi Chill</option>
+                        <option value="https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0a13f69d2.mp3">🎵 Acoustic</option>
+                        <option value="https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8c8a73467.mp3">🎵 Upbeat</option>
+                    </select>
+                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-amber-700">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </div>
+                </div>
             </div>
+            
             <div id="action-buttons" class="mt-2 flex gap-2 hidden flex-wrap justify-center">
                 <button id="btn-surrender" onclick="surrenderGame()" class="text-xs font-bold text-white bg-rose-500 hover:bg-rose-600 px-4 py-2 rounded-lg shadow-sm transition-all active:scale-95">🏳️ Menyerah</button>
                 <button id="btn-reset" onclick="resetGame()" class="text-xs font-bold text-white bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded-lg shadow-sm transition-all active:scale-95 hidden">🔄 Main Lagi</button>

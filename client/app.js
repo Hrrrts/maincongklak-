@@ -53,12 +53,15 @@ function playDropSound() {
 }
 function triggerVibrate() { try { if (navigator.vibrate) navigator.vibrate(30); } catch(e){} }
 
+// FIX: Browser dipaksa load ulang file audio baru
 window.changeBGM = function() {
     initAudio();
     const bgm = document.getElementById('bgm');
     const select = document.getElementById('bgm-select');
     if(bgm && select) {
+        bgm.pause();
         bgm.src = select.value;
+        bgm.load(); // Wajib ada biar musik beneran ganti
         bgm.play().catch(e => console.log("BGM dicegah autoplay"));
     }
 }
