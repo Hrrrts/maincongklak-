@@ -9,59 +9,91 @@ window.suitResultTimer = null;
 window.activeHole = null; 
 window.confettiFired = false;
 
-// Variabel Timer Match Lokal
-let matchTimer = null;
-let matchSeconds = 0;
+let matchTimer = null, matchSeconds = 0;
 
-let myClientId = sessionStorage.getItem('congklak_client_id') || (() => {
-    let id = Math.random().toString(36).substring(2, 11);
-    sessionStorage.setItem('congklak_client_id', id);
-    return id;
-})();
+let myClientId = "player_" + Math.random().toString(36).substr(2, 9);
+try {
+    myClientId = sessionStorage.getItem('congklak_client_id') || myClientId;
+    sessionStorage.setItem('congklak_client_id', myClientId);
+} catch(e) {}
 
 let gameState = { board: new Array(16).fill(0), current_player: 1, game_over: false, winner: null, p1_ready: false, p2_ready: false, p1_suit: null, p2_suit: null, suit_winner: null, p1_name: "", p2_name: "" };
 
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-function playDropSound() {
-    if(audioCtx.state === 'suspended') audioCtx.resume();
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(600, audioCtx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.05);
-    gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
-    osc.start();
-    osc.stop(audioCtx.currentTime + 0.1);
+// FIX: Lazy Load Audio agar tidak di-crash oleh browser!
+let audioCtx = null;
+function initAudio() {
+    try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+    } catch(e) { console.error("Audio diblokir browser:", e); }
 }
-function triggerVibrate() { if (navigator.vibrate) navigator.vibrate(30); }
 
-// Fitur Ganti Musik
-function changeBGM() {
+function playDropSound() {
+    initAudio();
+    if(!audioCtx) return;
+    try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.05);
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.1);
+    } catch(e){}
+}
+function triggerVibrate() { try { if (navigator.vibrate) navigator.vibrate(30); } catch(e){} }
+
+window.changeBGM = function() {
     const bgm = document.getElementById('bgm');
     const select = document.getElementById('bgm-select');
-    bgm.src = select.value;
-    bgm.play().catch(e => console.log("BGM butuh interaksi"));
+    if(bgm && select) {
+        bgm.src = select.value;
+        bgm.play().catch(e => console.log("BGM dicegah autoplay"));
+    }
 }
 
-window.onload = () => {
+// FIX: Pindahkan onload ke event listener agar lebih aman
+document.addEventListener('DOMContentLoaded', () => {
     const urlParams = new URLSearchParams(window.location.search);
     const roomFromUrl = urlParams.get('room');
-    const savedName = localStorage.getItem('congklak_player_name') || "";
+    let savedName = "";
+    try { savedName = localStorage.getItem('congklak_player_name') || ""; } catch(e){}
 
-    if (savedName) document.getElementById('name-input').value = savedName;
+    if (savedName) {
+        const nameInput = document.getElementById('name-input');
+        if(nameInput) nameInput.value = savedName;
+    }
+
+    const roomInput = document.getElementById('room-input');
     if (roomFromUrl) {
-        document.getElementById('room-input').value = roomFromUrl.toUpperCase();
+        if(roomInput) roomInput.value = roomFromUrl.toUpperCase();
         if (savedName) {
-            document.querySelector("#lobby button").innerText = "Auto-Join...";
+            const btn = document.querySelector("#lobby button");
+            if (btn) btn.innerText = "Auto-Join...";
             setTimeout(joinRoom, 800); 
         }
     } else {
-        document.getElementById('room-input').value = Math.random().toString(36).substring(2, 6).toUpperCase();
+        if(roomInput) roomInput.value = Math.random().toString(36).substring(2, 6).toUpperCase();
     }
-};
+});
+
+window.toggleTutorial = function() {
+    const content = document.getElementById('tutorial-content');
+    const arrow = document.getElementById('tutorial-arrow');
+    if (content && arrow) {
+        if (content.classList.contains('hidden')) {
+            content.classList.remove('hidden');
+            arrow.style.transform = 'rotate(180deg)';
+        } else {
+            content.classList.add('hidden');
+            arrow.style.transform = 'rotate(0deg)';
+        }
+    }
+}
 
 function shareWhatsApp() {
     const appUrl = window.location.href.split('?')[0];
@@ -69,14 +101,15 @@ function shareWhatsApp() {
     window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`, '_blank');
 }
 
-// Timer Logic
 function updateTimerDisplay() {
     const mins = Math.floor(matchSeconds / 60).toString().padStart(2, '0');
     const secs = (matchSeconds % 60).toString().padStart(2, '0');
-    document.getElementById('game-timer').innerText = `⏱️ ${mins}:${secs}`;
+    const timerEl = document.getElementById('game-timer');
+    if(timerEl) timerEl.innerText = `⏱️ ${mins}:${secs}`;
 }
 function startTimer() {
-    document.getElementById('game-timer').classList.remove('hidden');
+    const timerEl = document.getElementById('game-timer');
+    if(timerEl) timerEl.classList.remove('hidden');
     if (!matchTimer) {
         matchTimer = setInterval(() => {
             if (!gameState.game_over) {
@@ -88,34 +121,44 @@ function startTimer() {
 }
 function resetTimerLocally() {
     clearInterval(matchTimer);
-    matchTimer = null;
-    matchSeconds = 0;
+    matchTimer = null; matchSeconds = 0;
     updateTimerDisplay();
-    document.getElementById('game-timer').classList.add('hidden');
+    const timerEl = document.getElementById('game-timer');
+    if(timerEl) timerEl.classList.add('hidden');
 }
 
 function checkGamePhase() {
     if (isAnimating) return;
     if (gameState.suit_winner && gameState.suit_winner !== 'SERI' && window.gameStarted) {
-        startTimer();
-        renderBoard();
-        return;
+        startTimer(); renderBoard(); return;
     }
     if (gameState.p1_suit && gameState.p2_suit && !gameState.suit_winner && myRole === 1) calculateSuitWinner();
     if (gameState.p1_ready && gameState.p2_ready && !gameState.p1_suit && !gameState.p2_suit && !gameState.suit_winner) {
-        if (!pregameCountdownInterval && document.getElementById('pregame-suit-choices').classList.contains('hidden')) startPregameCountdown();
+        const choicesDiv = document.getElementById('pregame-suit-choices');
+        if (!pregameCountdownInterval && choicesDiv && choicesDiv.classList.contains('hidden')) startPregameCountdown();
     }
     renderBoard();
 }
 
-async function joinRoom() {
-    const roomInput = document.getElementById('room-input').value.trim().toUpperCase();
-    const nameInput = document.getElementById('name-input').value.trim();
-    if (!roomInput || !nameInput) return alert("Lengkapi data!");
+window.joinRoom = async function() {
+    const roomInput = document.getElementById('room-input');
+    const nameInput = document.getElementById('name-input');
+    if(!roomInput || !nameInput) return;
+    const roomVal = roomInput.value.trim().toUpperCase();
+    const nameVal = nameInput.value.trim();
+
+    if (!roomVal || !nameVal) return alert("Lengkapi data!");
     
-    document.querySelector("#lobby button").innerText = "Memuat...";
-    myRoom = roomInput; myName = nameInput; 
-    localStorage.setItem('congklak_player_name', myName); 
+    // Mulai Audio Context & Musik pas diklik
+    initAudio();
+    const bgm = document.getElementById('bgm');
+    if(bgm) { bgm.volume = 0.2; bgm.play().catch(e => console.log(e)); }
+
+    const lobbyBtn = document.querySelector("#lobby button");
+    if(lobbyBtn) lobbyBtn.innerText = "Memuat...";
+    myRoom = roomVal; myName = nameVal; 
+    
+    try { localStorage.setItem('congklak_player_name', myName); } catch(e){}
     window.history.replaceState({}, '', `?room=${myRoom}`);
 
     let { data: room } = await db.from('rooms').select('*').eq('id', myRoom).single();
@@ -128,12 +171,18 @@ async function joinRoom() {
         if (room.p1_id === myClientId) { myRole = 1; if (room.p1_name !== myName) await db.from('rooms').update({p1_name: myName}).eq('id', myRoom); } 
         else if (room.p2_id === myClientId) { myRole = 2; if (room.p2_name !== myName) await db.from('rooms').update({p2_name: myName}).eq('id', myRoom); } 
         else if (!room.p2_id) { myRole = 2; await db.from('rooms').update({ p2_id: myClientId, p2_name: myName, p1_ready: false, p2_ready: false, p1_suit: null, p2_suit: null, suit_winner: null }).eq('id', myRoom); } 
-        else return alert("Ruangan penuh.");
+        else {
+            if(lobbyBtn) lobbyBtn.innerText = "Masuk Ruangan";
+            return alert("Ruangan penuh.");
+        }
     }
 
-    document.getElementById('chat-room-id').innerText = `KODE: ${myRoom}`;
-    document.getElementById('lobby').classList.add('hidden');
-    document.getElementById('game-area').classList.remove('hidden');
+    const roomIdEl = document.getElementById('chat-room-id');
+    const lobbyEl = document.getElementById('lobby');
+    const gameAreaEl = document.getElementById('game-area');
+    if(roomIdEl) roomIdEl.innerText = `KODE: ${myRoom}`;
+    if(lobbyEl) lobbyEl.classList.add('hidden');
+    if(gameAreaEl) gameAreaEl.classList.remove('hidden');
 
     let { data: currentRoom } = await db.from('rooms').select('*').eq('id', myRoom).single();
     if (currentRoom) { 
@@ -155,10 +204,13 @@ async function joinRoom() {
     .subscribe();
 }
 
-// Fitur Chat Ekstra
-function insertEmote(emoji) { document.getElementById('chat-input').value += emoji; }
-function sendChat() {
+window.insertEmote = function(emoji) { 
     const input = document.getElementById('chat-input');
+    if(input) input.value += emoji; 
+}
+window.sendChat = function() {
+    const input = document.getElementById('chat-input');
+    if(!input) return;
     const text = input.value.trim();
     if (!text) return;
     appendChatMessage("Anda", text, true);
@@ -167,6 +219,7 @@ function sendChat() {
 }
 function appendChatMessage(displayName, text, isMe) {
     const container = document.getElementById('chat-messages');
+    if(!container) return;
     const msgDiv = document.createElement('div');
     const alignClass = isMe ? 'self-end bg-amber-500 text-white rounded-tl-xl rounded-tr-xl rounded-bl-xl' : 'self-start bg-white border border-amber-200 text-amber-900 rounded-tl-xl rounded-tr-xl rounded-br-xl shadow-sm';
     msgDiv.className = `max-w-[80%] px-4 py-2 text-sm ${alignClass}`;
@@ -175,30 +228,28 @@ function appendChatMessage(displayName, text, isMe) {
     container.scrollTop = container.scrollHeight;
 }
 
-// Fitur Taunting Melayang
-function sendTaunt(emoji) {
+window.sendTaunt = function(emoji) {
     showFloatingTaunt(emoji, true);
     myChannel.send({ type: 'broadcast', event: 'taunt', payload: { emoji: emoji } });
 }
 function showFloatingTaunt(emoji, isMe) {
     const container = document.getElementById('taunt-container');
+    if(!container) return;
     const el = document.createElement('div');
     el.className = 'float-taunt';
     el.innerText = emoji;
-    // Acak posisi melayang sedikit
     el.style.left = isMe ? `${20 + Math.random()*10}%` : `${60 + Math.random()*10}%`;
     container.appendChild(el);
     setTimeout(() => el.remove(), 2000);
 }
 
-// Aksi Khusus: Menyerah & Reset Game
-async function surrenderGame() {
+window.surrenderGame = async function() {
     if(confirm("Yakin mau menyerah? Biji dan harga diri akan hilang!")) {
         const winner = myRole === 1 ? "2" : "1";
         await db.from('rooms').update({ game_over: true, winner: winner }).eq('id', myRoom);
     }
 }
-async function resetGame() {
+window.resetGame = async function() {
     if(confirm("Mulai permainan baru?")) {
         const initialBoard = [7,7,7,7,7,7,7, 0, 7,7,7,7,7,7,7, 0];
         await db.from('rooms').update({ board: initialBoard, current_player: 1, game_over: false, winner: null, p1_ready: false, p2_ready: false, p1_suit: null, p2_suit: null, suit_winner: null }).eq('id', myRoom);
@@ -208,41 +259,35 @@ async function resetGame() {
     }
 }
 
-// Fitur Auto Screenshot (Pamer WA)
-function takeScreenshotAndShare() {
+window.takeScreenshotAndShare = function() {
     const btn = document.getElementById('btn-ss');
+    const area = document.getElementById('capture-area');
+    if(!btn || !area) return;
     btn.innerText = "Memproses...";
     
-    html2canvas(document.getElementById('capture-area'), { backgroundColor: '#fef3c7', scale: 2 }).then(canvas => {
+    html2canvas(area, { backgroundColor: '#fef3c7', scale: 2 }).then(canvas => {
         canvas.toBlob(blob => {
             const file = new File([blob], 'HasilCongklak.jpg', { type: 'image/jpeg' });
-            // Cek apakah browser mendukung fitur share file (biasanya HP Android/iOS)
             if (navigator.canShare && navigator.canShare({ files: [file] })) {
                 navigator.share({
                     files: [file],
                     title: 'Hasil Congklak',
-                    text: `Saya memenangkan pertandingan Congklak! Berani tantang? Main di sini: ${window.location.href.split('?')[0]}?room=${myRoom}`
+                    text: `Saya memenangkan pertandingan Congklak! Main di sini: ${window.location.href.split('?')[0]}?room=${myRoom}`
                 }).catch(console.error);
             } else {
-                // Fallback untuk Laptop: Download otomatis
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
-                a.href = url;
-                a.download = 'HasilCongklak.jpg';
-                a.click();
+                a.href = url; a.download = 'HasilCongklak.jpg'; a.click();
                 alert("Gambar berhasil di-download! Silakan bagikan manual.");
             }
-            btn.innerText = "📸 Pamer Status WA";
+            btn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg> Pamer Status WA`;
         }, 'image/jpeg', 0.9);
     });
 }
 
-// Sisanya Logika Pre-Game & Game (Sama persis kayak sebelumnya)
-async function clickReady() {
-    const bgm = document.getElementById('bgm');
-    bgm.volume = 0.2; bgm.play().catch(e=>console.log(e));
+window.clickReady = async function() {
     const btn = document.getElementById('pregame-ready-btn');
-    btn.classList.add('hidden'); btn.disabled = true;
+    if(btn) { btn.classList.add('hidden'); btn.disabled = true; }
     let RumahKita = `p${myRole}_ready`;
     await db.from('rooms').update({ [RumahKita]: true }).eq('id', myRoom);
 }
@@ -252,7 +297,7 @@ function startPregameCountdown() {
     document.getElementById('pregame-suit-result').classList.add('hidden');
     const countdownDiv = document.getElementById('pregame-suit-countdown');
     countdownDiv.classList.remove('hidden');
-    countdownDiv.innerHTML = `<div class="text-xs uppercase font-bold text-amber-600 tracking-wider">Bersiap Memilih Dalam...</div><div id="pregame-suit-seconds" class="text-7xl font-black">5</div>`;
+    countdownDiv.innerHTML = `<div class="text-[10px] uppercase font-bold text-amber-600 tracking-wider mb-2">Mulai Memilih Dalam...</div><div id="pregame-suit-seconds" class="text-7xl font-black drop-shadow-sm">5</div>`;
     let secondsLeft = 5;
     pregameCountdownInterval = setInterval(() => {
         secondsLeft--;
@@ -261,12 +306,16 @@ function startPregameCountdown() {
         if (secondsLeft <= 0) { clearInterval(pregameCountdownInterval); pregameCountdownInterval = null; showSuitChoices(); }
     }, 1000);
 }
-function showSuitChoices() { document.getElementById('pregame-suit-countdown').classList.add('hidden'); document.getElementById('pregame-suit-choices').classList.remove('hidden'); isAnimating = false; }
-async function clickSuit(choice) {
+function showSuitChoices() { 
+    document.getElementById('pregame-suit-countdown').classList.add('hidden'); 
+    document.getElementById('pregame-suit-choices').classList.remove('hidden'); 
+    isAnimating = false; 
+}
+window.clickSuit = async function(choice) {
     document.getElementById('pregame-suit-choices').classList.add('hidden');
     const countdownDiv = document.getElementById('pregame-suit-countdown');
     countdownDiv.classList.remove('hidden');
-    countdownDiv.innerHTML = `<div class="text-xl font-bold text-amber-600">Menunggu Lawan Memilih...</div>`;
+    countdownDiv.innerHTML = `<div class="text-xl font-bold text-amber-600">Menunggu Lawan...</div>`;
     let RumahKita = `p${myRole}_suit`;
     await db.from('rooms').update({ [RumahKita]: choice }).eq('id', myRoom);
 }
@@ -290,6 +339,9 @@ function renderBoard() {
     const btnSurrender = document.getElementById('btn-surrender');
     const btnReset = document.getElementById('btn-reset');
     const btnSS = document.getElementById('btn-ss');
+    const roleIndicator = document.getElementById('role-indicator');
+
+    if(roleIndicator) roleIndicator.innerText = `ANDA PLAYER ${myRole}`;
 
     if (gameState.p1_suit && gameState.p2_suit && !window.gameStarted) {
         document.getElementById('pregame-suit-countdown').classList.add('hidden');
@@ -297,7 +349,7 @@ function renderBoard() {
         document.getElementById('pregame-ready-section').classList.add('hidden');
         const resultDiv = document.getElementById('pregame-suit-result');
         resultDiv.classList.remove('hidden');
-        actionButtons.classList.add('hidden');
+        if(actionButtons) actionButtons.classList.add('hidden');
 
         const icons = { batu: '✊', kertas: '✋', gunting: '✌️' };
         let winText = "Menghitung hasil...", textStyle = "text-amber-600";
@@ -329,59 +381,67 @@ function renderBoard() {
                 }
             }, 3500);
         }
-        statusText.innerText = "Fase Penentuan";
-        statusText.className = "text-xl font-bold text-amber-900 bg-amber-100 px-6 py-2 rounded-full shadow-sm";
+        if(statusText) {
+            statusText.innerText = "Fase Penentuan";
+            statusText.className = "text-lg md:text-xl font-bold text-amber-900 bg-amber-100 px-6 py-2 rounded-full shadow-sm";
+        }
         return; 
     }
 
     if (gameState.suit_winner && gameState.suit_winner !== 'SERI' && window.gameStarted) {
         pregamePanel.classList.add('hidden');
         mainBoardContainer.classList.remove('hidden');
-        actionButtons.classList.remove('hidden'); // Tampilkan box action
+        if(actionButtons) actionButtons.classList.remove('hidden'); 
         renderGameHoles();
 
         if (gameState.game_over) {
             clearInterval(matchTimer);
-            btnSurrender.classList.add('hidden');
-            btnReset.classList.remove('hidden');
+            if(btnSurrender) btnSurrender.classList.add('hidden');
+            if(btnReset) btnReset.classList.remove('hidden');
             
             if (gameState.winner === "SERI") {
-                statusText.innerText = "PERMAINAN SELESAI: HASIL SERI!";
-                btnSS.classList.add('hidden');
+                if(statusText) statusText.innerText = "PERMAINAN SELESAI: HASIL SERI!";
+                if(btnSS) btnSS.classList.add('hidden');
             } else if (parseInt(gameState.winner) === myRole) {
-                 statusText.innerText = "ANDA MENANG! 🎉";
-                 btnSS.classList.remove('hidden'); // Tampilkan tombol pamer WA
+                 if(statusText) statusText.innerText = "ANDA MENANG! 🎉";
+                 if(btnSS) btnSS.classList.remove('hidden'); 
                  if (!window.confettiFired) {
                      window.confettiFired = true;
-                     confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
+                     if(typeof confetti !== 'undefined') confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
                  }
             } else {
                  const winnerName = (gameState.winner === "1") ? gameState.p1_name : gameState.p2_name;
-                 statusText.innerText = `${winnerName} Memenangkan Permainan.`;
-                 btnSS.classList.add('hidden');
+                 if(statusText) statusText.innerText = `${winnerName} Memenangkan Permainan.`;
+                 if(btnSS) btnSS.classList.add('hidden');
             }
-            statusText.className = "text-xl font-bold text-rose-900 bg-rose-100 px-6 py-2 rounded-full shadow-sm";
+            if(statusText) statusText.className = "text-lg md:text-xl font-bold text-rose-900 bg-rose-100 px-6 py-2 rounded-full shadow-sm";
         } else {
-            btnSurrender.classList.remove('hidden');
-            btnReset.classList.add('hidden');
-            btnSS.classList.add('hidden');
+            if(btnSurrender) btnSurrender.classList.remove('hidden');
+            if(btnReset) btnReset.classList.add('hidden');
+            if(btnSS) btnSS.classList.add('hidden');
 
             if (isAnimating) {
-                statusText.innerText = "Sedang membagikan biji...";
-                statusText.className = "text-xl font-bold text-blue-900 bg-blue-100 px-6 py-2 rounded-full shadow-sm animate-pulse";
+                if(statusText) {
+                    statusText.innerText = "Sedang membagikan biji...";
+                    statusText.className = "text-lg md:text-xl font-bold text-blue-900 bg-blue-100 px-6 py-2 rounded-full shadow-sm animate-pulse";
+                }
             } else if (gameState.current_player === myRole) {
-                statusText.innerText = "Giliran Anda.";
-                statusText.className = "text-xl font-bold text-emerald-900 bg-emerald-100 px-6 py-2 rounded-full shadow-sm";
+                if(statusText) {
+                    statusText.innerText = "Giliran Anda.";
+                    statusText.className = "text-lg md:text-xl font-bold text-emerald-900 bg-emerald-100 px-6 py-2 rounded-full shadow-sm";
+                }
             } else {
                 const currentPlayerName = (gameState.current_player === 1) ? gameState.p1_name : gameState.p2_name;
-                statusText.innerText = `Menunggu ${currentPlayerName}...`;
-                statusText.className = "text-xl font-bold text-amber-900 bg-amber-100 px-6 py-2 rounded-full shadow-sm";
+                if(statusText) {
+                    statusText.innerText = `Menunggu ${currentPlayerName}...`;
+                    statusText.className = "text-lg md:text-xl font-bold text-amber-900 bg-amber-100 px-6 py-2 rounded-full shadow-sm";
+                }
             }
         }
     } else {
         mainBoardContainer.classList.add('hidden');
         pregamePanel.classList.remove('hidden'); 
-        actionButtons.classList.add('hidden');
+        if(actionButtons) actionButtons.classList.add('hidden');
         
         if (!gameState.p1_ready || !gameState.p2_ready) {
              document.getElementById('pregame-suit-countdown').classList.add('hidden');
@@ -391,11 +451,9 @@ function renderBoard() {
              const RumahKita = `p${myRole}_ready`;
              const btn = document.getElementById('pregame-ready-btn');
              if (gameState[RumahKita]) {
-                 btn.innerText = "Menunggu Lawan Siap...";
-                 btn.disabled = true; btn.classList.remove('hidden');
+                 if(btn) { btn.innerText = "Menunggu Lawan Siap..."; btn.disabled = true; btn.classList.remove('hidden'); }
              } else {
-                 btn.innerText = "Siap Bermain";
-                 btn.disabled = false; btn.classList.remove('hidden');
+                 if(btn) { btn.innerText = "Siap Bermain"; btn.disabled = false; btn.classList.remove('hidden'); }
              }
         } else {
              document.getElementById('pregame-ready-section').classList.add('hidden');
@@ -407,8 +465,10 @@ function renderBoard() {
                  countdownDiv.innerHTML = `<div class="text-xl font-bold text-amber-600">Menunggu Lawan Memilih...</div>`;
              }
         }
-        statusText.innerText = "Persiapan Permainan";
-        statusText.className = "text-xl font-bold text-amber-900 bg-amber-100 px-6 py-2 rounded-full shadow-sm";
+        if(statusText) {
+            statusText.innerText = "Persiapan Permainan";
+            statusText.className = "text-lg md:text-xl font-bold text-amber-900 bg-amber-100 px-6 py-2 rounded-full shadow-sm";
+        }
     }
 }
 
@@ -424,6 +484,7 @@ function renderSeeds(count) {
 function renderGameHoles() {
     const topContainer = document.getElementById('holes-top');
     const bottomContainer = document.getElementById('holes-bottom');
+    if(!topContainer || !bottomContainer) return;
     topContainer.innerHTML = ''; bottomContainer.innerHTML = '';
 
     let bottomIndices, topIndices, leftStoreIndex, rightStoreIndex, leftName, rightName;
@@ -471,14 +532,14 @@ function checkGameOver(board) {
 
 const delay = ms => new Promise(res => setTimeout(res, ms));
 
-async function clickHole(holeIndex) {
+window.clickHole = async function(holeIndex) {
     if (!window.gameStarted) return; 
     isAnimating = true; 
     let board = [...gameState.board], p = gameState.current_player, seeds = board[holeIndex];
     board[holeIndex] = 0; 
     let currentIndex = holeIndex, isSowing = true, nextPlayer = p;
 
-    if(audioCtx.state === 'suspended') audioCtx.resume();
+    if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
 
     while (isSowing) {
         gameState.board = [...board]; renderBoard(); await delay(300); 
