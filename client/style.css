@@ -1,0 +1,8 @@
+/* CSS Terpisah biar rapi */
+.custom-scrollbar::-webkit-scrollbar { height: 4px; width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: #fef3c7; border-radius: 10px; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #d97706; border-radius: 10px; }
+.active-hole { animation: pulse-ring 0.8s infinite; border-color: #fbbf24 !important; transform: scale(1.05); z-index: 20; }
+@keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(251,191,36,0.7); } 70% { box-shadow: 0 0 0 8px rgba(251,191,36,0); } 100% { box-shadow: 0 0 0 0 rgba(251,191,36,0); } }
+.float-taunt { position: absolute; font-size: 3rem; bottom: 10px; animation: floatUp 2.5s ease-out forwards; pointer-events: none; z-index: 100; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.4)); }
+@keyframes floatUp { 0% { opacity: 0; transform: translateY(20px) scale(0.5); } 15% { opacity: 1; transform: translateY(-10px) scale(1.2); } 100% { opacity: 0; transform: translateY(-180px) scale(1); } }

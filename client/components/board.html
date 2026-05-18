@@ -1,0 +1,67 @@
+<div class="flex flex-col items-center gap-2 text-center">
+    <div id="status-panel" class="text-lg md:text-xl font-bold text-amber-900 bg-amber-100 px-6 py-2 rounded-full shadow-sm">Menghubungkan...</div>
+    <div class="flex gap-2 items-center justify-center mt-1 flex-wrap">
+        <span id="role-indicator" class="text-[10px] font-bold text-amber-700 uppercase bg-amber-200/50 px-3 py-1.5 rounded-full border border-amber-200"></span>
+        <span id="game-timer" class="text-[10px] font-bold text-blue-700 bg-blue-100 px-3 py-1.5 rounded-full border border-blue-200 hidden">⏱️ 00:00</span>
+        <div class="relative inline-block">
+            <select id="bgm-select" onchange="changeBGM()" class="text-[10px] bg-amber-200/50 text-amber-900 border border-amber-300 rounded-full px-4 py-1.5 outline-none font-bold cursor-pointer appearance-none text-center">
+                <option value="https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3">🎵 Lofi Chill</option>
+                <option value="https://cdn.pixabay.com/download/audio/2022/04/27/audio_651239c0f9.mp3">🎵 Acoustic</option>
+                <option value="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3">🎵 Upbeat (Baru)</option>
+            </select>
+        </div>
+    </div>
+    <div id="action-buttons" class="mt-2 flex gap-2 hidden flex-wrap justify-center">
+        <button id="btn-surrender" onclick="surrenderGame()" class="text-xs font-bold text-white bg-rose-500 px-4 py-2 rounded-lg">🏳️ Menyerah</button>
+        <button id="btn-reset" onclick="resetGame()" class="text-xs font-bold text-white bg-blue-500 px-4 py-2 rounded-lg hidden">🔄 Main Lagi</button>
+        <button id="btn-ss" onclick="takeScreenshotAndShare()" class="text-xs font-bold text-amber-900 bg-amber-300 px-4 py-2 rounded-lg hidden">📸 Pamer WA</button>
+        <button id="btn-exit-tutorial" onclick="exitTutorial()" class="text-xs font-bold text-white bg-gray-700 px-4 py-2 rounded-lg hidden">Keluar Latihan</button>
+    </div>
+</div>
+
+<div id="pregame-panel" class="bg-white p-6 rounded-3xl shadow-lg w-full max-w-sm mx-auto border border-amber-100 text-center flex flex-col gap-6">
+     <div id="pregame-ready-section" class="flex flex-col items-center gap-3">
+          <span id="pregame-ready-status" class="text-sm font-bold text-amber-900">Tekan tombol jika Anda siap:</span>
+          <button id="pregame-ready-btn" onclick="clickReady()" class="w-full bg-emerald-500 text-white font-bold py-3 px-4 rounded-xl text-base">Siap Bermain</button>
+     </div>
+     <div id="pregame-suit-countdown" class="hidden text-amber-900">
+          <div class="text-[10px] uppercase font-bold text-amber-600 tracking-wider mb-2">Mulai Memilih Dalam...</div>
+          <div id="pregame-suit-seconds" class="text-7xl font-black drop-shadow-sm">5</div>
+     </div>
+     <div id="pregame-suit-choices" class="hidden flex flex-col items-center gap-4">
+          <span class="text-sm font-bold text-amber-900">Pilih Tangan Anda:</span>
+          <div class="flex gap-4">
+               <button onclick="clickSuit('batu')" class="text-3xl bg-amber-100 p-4 rounded-full">✊</button>
+               <button onclick="clickSuit('kertas')" class="text-3xl bg-amber-100 p-4 rounded-full">✋</button>
+               <button onclick="clickSuit('gunting')" class="text-3xl bg-amber-100 p-4 rounded-full">✌️</button>
+          </div>
+     </div>
+     <div id="pregame-suit-result" class="hidden flex flex-col items-center gap-2"></div>
+</div>
+
+<div id="main-board-container" class="hidden flex flex-col gap-4 relative w-full">
+     <div id="capture-area" class="w-full overflow-x-auto pb-4 custom-scrollbar bg-amber-50 rounded-[3rem] p-1">
+        <main class="min-w-[700px] bg-amber-800 p-5 md:p-6 rounded-[2.5rem] md:rounded-[3rem] shadow-xl flex items-center justify-between gap-5 md:gap-6 border-4 border-amber-950 mx-auto relative overflow-hidden">
+            <div id="taunt-container" class="absolute w-full h-full pointer-events-none z-50"></div>
+            <div class="flex flex-col items-center gap-2 relative">
+                 <div id="store-left-name" class="absolute -top-6 text-[10px] md:text-xs font-bold text-amber-300 uppercase w-full text-center truncate"></div>
+                 <div id="store-left" class="w-16 h-32 md:w-20 md:h-40 bg-amber-950 rounded-[2rem] md:rounded-[3rem] flex items-center justify-center text-white font-black text-2xl md:text-3xl shadow-[inset_0_6px_12px_rgba(0,0,0,0.6)] relative overflow-hidden flex flex-col justify-end pb-3">
+                     <div id="store-left-seeds" class="absolute top-2 left-0 w-full px-2 flex flex-wrap justify-center gap-1 pointer-events-none"></div>
+                     <span id="store-left-text" class="z-10 bg-white/20 px-2 py-0.5 rounded text-base md:text-lg">0</span>
+                 </div>
+            </div>
+            <div class="flex-1 flex flex-col gap-3 md:gap-4">
+                <div class="flex justify-between gap-1.5 md:gap-2" id="holes-top"></div>
+                <div class="flex justify-between items-center text-amber-500/80 -my-2 relative px-4 text-xl md:text-2xl font-black"><span>→</span><span class="w-full border-t-[3px] md:border-t-4 border-dashed border-amber-500/50 mx-4"></span><span>←</span></div>
+                <div class="flex justify-between gap-1.5 md:gap-2" id="holes-bottom"></div>
+            </div>
+            <div class="flex flex-col items-center gap-2 relative">
+                 <div id="store-right-name" class="absolute -top-6 text-[10px] md:text-xs font-bold text-amber-300 uppercase w-full text-center truncate"></div>
+                 <div id="store-right" class="w-16 h-32 md:w-20 md:h-40 bg-amber-950 rounded-[2rem] md:rounded-[3rem] flex items-center justify-center text-white font-black text-2xl md:text-3xl shadow-[inset_0_6px_12px_rgba(0,0,0,0.6)] relative overflow-hidden flex flex-col justify-end pb-3">
+                     <div id="store-right-seeds" class="absolute top-2 left-0 w-full px-2 flex flex-wrap justify-center gap-1 pointer-events-none"></div>
+                     <span id="store-right-text" class="z-10 bg-white/20 px-2 py-0.5 rounded text-base md:text-lg">0</span>
+                 </div>
+            </div>
+        </main>
+    </div>
+</div>
