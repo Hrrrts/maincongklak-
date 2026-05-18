@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Congklak Online</title>
+    <title>maincongklak</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
@@ -14,7 +14,7 @@
     <audio id="bgm" loop src="https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3" volume="0.3"></audio>
 
     <div class="mt-4 mb-6 flex flex-col items-center gap-1.5 text-center w-full">
-        <h1 class="text-4xl font-extrabold text-amber-900 tracking-tight leading-none">Congklak</h1>
+        <h1 class="text-4xl font-extrabold text-amber-900 tracking-tight leading-none">maincongklak</h1>
         <p class="text-xs text-amber-700 font-medium mb-1">Real-time Multiplayer Game</p>
         
         <div class="relative inline-block">
@@ -29,17 +29,39 @@
         </div>
     </div>
     
-    <div id="lobby" class="bg-white p-6 rounded-2xl shadow-xl w-full max-w-sm border border-amber-100 mb-6">
-        <h2 class="text-lg font-bold text-amber-900 mb-4 text-center">Bergabung ke Permainan</h2>
-        <div class="flex flex-col gap-1 mb-3">
-             <label class="text-[10px] font-bold text-amber-600 uppercase ml-1 tracking-wider">Nama Anda:</label>
-             <input id="name-input" type="text" placeholder="Masukkan nama..." class="w-full px-4 py-2.5 border-2 border-amber-200 rounded-xl focus:outline-none focus:border-amber-500 font-medium text-amber-900 transition-colors">
+    <div id="lobby" class="w-full max-w-sm flex flex-col gap-4 mb-6">
+        <div class="bg-white p-6 rounded-2xl shadow-xl border border-amber-100">
+            <h2 class="text-lg font-bold text-amber-900 mb-4 text-center">Bergabung ke Permainan</h2>
+            <div class="flex flex-col gap-1 mb-3">
+                 <label class="text-xs font-bold text-amber-600 uppercase ml-1 tracking-wider">Nama Anda:</label>
+                 <input id="name-input" type="text" placeholder="Masukkan nama..." class="w-full px-4 py-2.5 border-2 border-amber-200 rounded-xl focus:outline-none focus:border-amber-500 font-medium text-amber-900 transition-colors">
+            </div>
+            <div class="flex flex-col gap-1 mb-5">
+                 <label class="text-xs font-bold text-amber-600 uppercase ml-1 tracking-wider">Kode Ruangan:</label>
+                 <input id="room-input" type="text" class="w-full px-4 py-2.5 border-2 border-amber-200 rounded-xl focus:outline-none focus:border-amber-500 text-center uppercase font-black tracking-widest text-xl text-amber-900 bg-amber-50 transition-colors">
+            </div>
+            <button onclick="joinRoom()" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-md active:scale-95">Masuk Ruangan</button>
         </div>
-        <div class="flex flex-col gap-1 mb-5">
-             <label class="text-[10px] font-bold text-amber-600 uppercase ml-1 tracking-wider">Kode Ruangan:</label>
-             <input id="room-input" type="text" class="w-full px-4 py-2.5 border-2 border-amber-200 rounded-xl focus:outline-none focus:border-amber-500 text-center uppercase font-black tracking-widest text-xl text-amber-900 bg-amber-50 transition-colors">
+
+        <div class="bg-white p-4 rounded-2xl shadow-md border border-amber-100">
+            <button onclick="toggleTutorial()" class="w-full flex justify-between items-center font-bold text-amber-900 text-sm outline-none">
+                <span class="flex items-center gap-2">📖 Panduan Bermain (Tutorial)</span>
+                <span id="tutorial-arrow" class="text-amber-600 transition-transform duration-200">▼</span>
+            </button>
+            <div id="tutorial-content" class="hidden mt-3 text-xs text-amber-800 flex flex-col gap-2.5 border-t border-amber-100 pt-3 leading-relaxed max-h-80 overflow-y-auto pr-1 custom-scrollbar">
+                <p><strong>1. Papan & Komponen:</strong> Setiap lubang kecil diisi dengan 7 biji awal. Lubang besar di ujung kiri adalah <strong>Rumah Anda</strong> (tempat menampung skor akhir), sedangkan lubang besar di ujung kanan adalah milik lawan.</p>
+                <p><strong>2. Pergerakan Biji:</strong> Pilih salah satu lubang kecil di baris bawah (wilayah Anda) yang memiliki biji. Biji akan dibagikan satu per satu ke lubang berikutnya <strong>searah jarum jam</strong> (baris bawah bergerak ke kiri, baris atas bergerak ke kanan).</p>
+                <p><strong>3. Pengisian Rumah:</strong> Masukkan biji ke dalam lubang Rumah Anda sendiri saat melewatinya. Lubang Rumah milik lawan wajib dilewati (jangan diisi).</p>
+                <p><strong>4. Aturan Estafet:</strong> Jika biji terakhir Anda jatuh di lubang kecil yang <em>sudah memiliki isi</em>, ambil seluruh biji dari lubang tersebut dan lanjutkan pembagian (estafet).</p>
+                <p><strong>5. Berhenti & Menembak (Mati):</strong> Jika biji terakhir jatuh di lubang yang <em>kosong</em>, pergerakan Anda berhenti:</p>
+                <ul class="list-disc list-inside pl-1.5 flex flex-col gap-1 text-amber-900/90">
+                    <li>Jika lubang kosong tersebut berada di sisi Anda sendiri dan lubang lawan yang berada tepat di hadapannya memiliki isi, Anda melakukan <strong>Tembakan</strong>. Seluruh biji lawan di seberang beserta 1 biji terakhir Anda dimasukkan ke Rumah Anda. Giliran berganti.</li>
+                    <li>Jika jatuh di lubang kosong wilayah lawan, giliran Anda langsung selesai tanpa mendapatkan tembakan.</li>
+                </ul>
+                <p><strong>6. Bonus Giliran:</strong> Jika biji terakhir Anda jatuh tepat di dalam lubang Rumah Anda sendiri, Anda berhak mendapatkan bonus untuk memilih lubang dan berjalan kembali.</p>
+                <p><strong>7. Penentuan Pemenang:</strong> Permainan berakhir saat seluruh lubang kecil di salah satu sisi telah kosong. Sisa biji di sisi lain akan dimasukkan ke Rumah pemilik wilayah. Pemilik biji terbanyak di Rumah keluar sebagai pemenang.</p>
+            </div>
         </div>
-        <button onclick="joinRoom()" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-md active:scale-95">Masuk Ruangan</button>
     </div>
 
     <div id="game-area" class="hidden w-full flex flex-col gap-5 relative">
@@ -115,7 +137,6 @@
         </div>
 
         <div class="bg-white rounded-2xl shadow-lg border border-amber-200 flex flex-col h-80 overflow-hidden w-full max-w-lg mx-auto">
-            
             <div class="bg-amber-100/80 px-4 py-2.5 border-b border-amber-200 flex justify-between items-center">
                 <div class="flex items-center gap-2 text-xs font-bold text-amber-900">
                     <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
@@ -160,12 +181,23 @@
                 <button onclick="sendChat()" class="bg-amber-800 hover:bg-amber-900 text-white px-4 py-1.5 rounded-lg font-bold text-xs transition-all shadow-sm active:scale-95">Kirim</button>
             </div>
         </div>
-
     </div>
 
-    <script src="app.js"></script>
+    <script>
+        function toggleTutorial() {
+            const content = document.getElementById('tutorial-content');
+            const arrow = document.getElementById('tutorial-arrow');
+            if (content.classList.contains('hidden')) {
+                content.classList.remove('hidden');
+                arrow.style.transform = 'rotate(180deg)';
+            } else {
+                content.classList.add('hidden');
+                arrow.style.transform = 'rotate(0deg)';
+            }
+        }
+    </script>
     <style>
-        .custom-scrollbar::-webkit-scrollbar { height: 4px; }
+        .custom-scrollbar::-webkit-scrollbar { height: 4px; width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: #fef3c7; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #d97706; border-radius: 10px; }
         
